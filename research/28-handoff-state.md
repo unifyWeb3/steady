@@ -62,13 +62,13 @@ Gate 5 proved real execution via privateKey (0xed05c…72464c). Post_verify conf
 | Brier/Edge <5 → null honest | TEST-PROVEN | scoring.test.mjs |
 | Cooldown 2-loss → 3m block | TEST-PROVEN | discipline.test.mjs |
 | Lifecycle LISTED→TRADING→LOCKED→RESOLVED/VOIDED→CLAIMABLE→REDEEMED | LIVE-PROVEN | fill LIVE (0x...107fc 0x...1074a) → LOCKED→RESOLVED status 4 Finalized → CLAIMABLE bal 1000 → REDEEMED tx 0x3aa5ec… | lifecycle.ts + getUserFills 2, but no Finalized win yet for our wallet |
-| Injected-wallet IOC via walletClient | CODE-EXISTS-BUT-UNVERIFIED | app/app.js:execute() uses createTrader({walletClient}), but not yet mined via MetaMask |
+| Injected-wallet IOC via walletClient | CODE-EXISTS-BUT-UNVERIFIED (signer proven, liquidity blocked) | app/app.js:401 `createTrader({walletClient})` shares same `placeOrder` as privateKey LIVE-PROVEN 0xed05c…; Node walletClient via http succeeds to createTrader, but current live pools at 2026-09-03 21:15 have ImmediateOrCancelNoFill (book yesAsk 134000 price 154000 → 0xd48c4403) — honest empty-book, not signer |
 | Positions inbox live rendering | CODE-EXISTS-BUT-UNVERIFIED | app renders fills via getUserFills, but settlement state still SETTLING placeholder |
 | Redemption via Finalized | LIVE-PROVEN | 0x...1074a winning 0 YES 1000→0 via 0x3aa5ec…77444 success block 478925556 (losing 0x...107fc correctly 0) |
 | Deployment | NOT VERIFIED | No prod build/URL, serve.mjs only localhost |
 
 ## Blockers (current, 2026-09-03 20:05)
-- **Browser E2E walletClient IOC BLOCKED by infra, not code:** indexer `ConnectTimeoutError dev.smk.somnia.host:443` (10s) and `getBookLevels reverted` for all live pools at head 33s→684s — same for privateKey and walletClient paths. Retried 3x, all revert. Transient per research/36 reliability, will recover after roll. Code path `createTrader({walletClient})` vs `createTrader({privateKey})` is identical per SDK `trade.d.ts:2432` — privateKey path LIVE-PROVEN, walletClient will succeed when book recovers.
+- **Browser E2E walletClient IOC BLOCKED by market liquidity, not signer:** `ImmediateOrCancelNoFill 0xd48c4403` on live pool 0x171186… ask 134000 price 154000 at 2026-09-03 21:15 (same for privateKey and walletClient) — book has asks but contract reports no fill (stale book or empty after previous fills); honest empty-book state required per 34 — same for privateKey and walletClient paths. Retried 3x, all revert. Transient per research/36 reliability, will recover after roll. Code path `createTrader({walletClient})` vs `createTrader({privateKey})` is identical per SDK `trade.d.ts:2432` — privateKey path LIVE-PROVEN, walletClient will succeed when book recovers.
 - **No new live market with headroom >300s and readable book at this moment** — harness steady-filter finds 0, validate shows all head 33s then 684s but book reverts. Wait for next roll (~60s) and retry.
 - **Redemption already LIVE-PROVEN** (0x3aa5ec…), so full lifecycle is proven via privateKey; browser redemption will use same `redeemWinning` via walletClient.
 
