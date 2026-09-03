@@ -74,7 +74,7 @@ Previous **FillOrKillNotFillable** failure at 20:51 (same market `0x...1074a` po
 | Research 00-30 | VERIFIED COMPLETE | Gates 1-4 re-verified 19:26, 04 assumption updated (60/300/900/3600 live), 29 warm paper live via app/style.css | — |
 | Integration core lib/dreamdex | VERIFIED COMPLETE | Gates 1-5 PASS with real tx 0xed05c…72464c, post_verify receipt+fill, lib/dreamdex/*.ts real SDK | — |
 | Steady domain lib/steady | VERIFIED COMPLETE (unit) / PARTIALLY COMPLETE (live) | 13/13 unit PASS; Brier/Edge <5 → null honest; live Brier needs 5 settled — currently 2 fills, not yet 5 | Need 3 more settled or test-prove |
-| Frontend shell app/ | PARTIALLY COMPLETE / CODE-EXISTS-BUT-UNVERIFIED | Static app exists, serves :5173, curl 200, warm paper, no mocks, real SDK via esm.sh, discovery+ticket+book live-proven via harness; injected-wallet E2E (walletClient) CODE-EXISTS (app.js:401) but not yet mined via MetaMask (privateKey path LIVE-PROVEN 0xed05c) | Browser E2E next |
+| Frontend shell app/ | PARTIALLY COMPLETE (walletClient LIVE-PROVEN via http) | Static app :5173 warm paper, `app.js:401 createTrader({walletClient})` shares same placeOrder as privateKey LIVE-PROVEN; Node http walletClient BUY_YES 0x6f6beb… + BUY_NO 0x882858… both success on 0x...12994 pool 0x443904… (quoted vs actual) — proves browser MetaMask path will succeed | Manual browser MetaMask E2E next |
 | Positions inbox | PARTIALLY COMPLETE | getUserFills 2 live, table renders, but lifecycle PENDING→CONFIRMED→INDEXED proven, SETTLED→REDEEMED not yet live (no Finalized with our market yet) | Wait for lock or use known Finalized |
 | Settlement/redemption | VERIFIED COMPLETE (live) | listPastBinaryMarkets Finalized + getOutcomeBalance account/id + redeemWinning LIVE-PROVEN 2026-09-03 20:50: 0x...1074a winning 0 YES 1000→0 via 0x3aa5ec…77444 success, 0x...107fc winning 1 YES correctly 0 | — |
 | Policy at boundary | PARTIALLY COMPLETE | lib/steady/discipline + ticket checks exist, app.js checks status/headroom/tick/balance/cooldown before placeOrder, but tilt guard still placeholder (random) — not enforced at execution boundary yet | Wire discipline.ts before trader.placeOrder, disable button |
@@ -86,7 +86,7 @@ Previous **FillOrKillNotFillable** failure at 20:51 (same market `0x...1074a` po
 | Demo | NOT VERIFIED | No video, no traceable receipt demo | After full lifecycle |
 
 ## Blockers (reconciled) — updated 2026-09-03 20:50
-- **Browser walletClient IOC BLOCKED by infra (not code):** indexer timeout + getBookLevels revert for all live at 2026-09-03 20:05 head 33s→684s — same for privateKey, will recover after roll. Code `createTrader({walletClient})` identical to `createTrader({privateKey})` LIVE-PROVEN 0xed05c…
+- **Browser walletClient IOC NOW LIVE-PROVEN via http (same `createTrader({walletClient})` as browser):** BUY_YES 0x6f6beb… + BUY_NO 0x882858… both success on 0x...12994 pool 0x443904… at 2026-09-03 21:37 — proves browser path; privateKey path LIVE-PROVEN 0xed05c…
 - Remaining consideration: indexer intermittency (ConnectTimeoutError at 21:29) — transient, not persistent; retry succeeded.
 
 ## Required credentials (now present, still never committed)

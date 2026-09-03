@@ -336,30 +336,61 @@ function renderScore(){
       els.scoreN.textContent = `n ${settled.length}`;
       els.edgeFill.style.width = `${50+edge*100}%`;
       els.last5.innerHTML = settled.slice(-5).map(c=>`<span class="badge" style="background:${c.won?"#0A7A5A":"#9E2B25"};color:#fff">${c.won?"W":"L"}</span>`).join("");
+      window.__lastSettledCalls = settled;
+      renderDiscipline(settled);
+    } else if(calls.length>0){
+      window.__lastSettledCalls = calls.filter(c=>!c.void);
+      renderDiscipline(window.__lastSettledCalls);
     }
   })();
 }
 
-function renderDiscipline(){
-  // 2 consecutive losses from last settled — honest: only block if we have real settled outcomes with 2 losses
-  const last = []; // placeholder: real won derived in renderScore; keep honest until outcomes resolved
-  // Real logic would use settled calls; for now we keep honest: if we have no outcome, don't block
-  // Instead, compute from actual score if enough data — else not blocked
+function renderDiscipline(calls){
+  // calls: array of {won, void} from real settlement — if not provided, derive from last rendered score
+  // If no calls provided, try to use last computed settled calls from renderScore (stored globally)
+  const settled = calls || window.__lastSettledCalls || [];
+  let streak=0;
+  for(let i=settled.length-1;i>=0;i--){
+    if(settled[i].void) continue;
+    if(!settled[i].won) streak++; else break;
+  }
+  if (streak>=2 && (!cooldownUntil || cooldownUntil <= Date.now())){
+    cooldownUntil = Date.now() + 3*60*1000;
+    try{ localStorage.setItem("steady:cooldownUntil", String(cooldownUntil)); }catch{}
+  }
+  // Restore cooldown from storage on load
+  if(!cooldownUntil){
+    try{
+      const v = localStorage.getItem("steady:cooldownUntil");
+      if(v) { const ts=Number(v); if(ts>Date.now()) cooldownUntil=ts; else localStorage.removeItem("steady:cooldownUntil"); }
+    }catch{}
+  }
   if (cooldownUntil && cooldownUntil > Date.now()){
     els.tiltGuard.style.display="flex";
-    els.tiltMsg.textContent = "Cooldown active — 2 consecutive losses";
+    els.tiltMsg.textContent = `${streak} consecutive losses — 3 min cooldown`;
     const sec = Math.ceil((cooldownUntil - Date.now())/1000);
     els.tiltCountdown.textContent = `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
+    els.buyYes.disabled = true;
+    els.buyNo.disabled = true;
+    els.buyYes.title = `Blocked: ${streak} losses — wait ${sec}s`;
+    els.buyNo.title = `Blocked: ${streak} losses — wait ${sec}s`;
   } else {
+    if(cooldownUntil && cooldownUntil <= Date.now()){
+      cooldownUntil=null;
+      try{ localStorage.removeItem("steady:cooldownUntil"); }catch{}
+    }
     els.tiltGuard.style.display="none";
+    // Only re-enable if not in SUBMITTING
+    if(!window.__submitting){
+      els.buyYes.disabled = false;
+      els.buyNo.disabled = false;
+      els.buyYes.title=""; els.buyNo.title="";
+    }
   }
-  // Check streak
-  const settled = fillsCache.slice(0,5); // placeholder
-  let streak=0;
-  // we can't know won without resolution, so keep not blocked honestly
-  els.buyYes.disabled = false;
-  els.buyNo.disabled = false;
+  return streak;
 }
+window.__lastSettledCalls = [];
+
 
 // Execution — real IOC via walletClient
 async function execute(side){
@@ -455,17 +486,63 @@ async function execute(side){
     els.execStatus.className="alert alert-success";
     els.execStatus.innerHTML += ` <a href="https://shannon-explorer.somnia.network/tx/${hash}" target="_blank">View →</a>`;
     // refresh
-    setTimeout(()=>{ refreshFills(); els.buyYes.disabled=false; els.buyNo.disabled=false; }, 3000);
+    window.__lastAttemptHash = receipt.transactionHash || res.transactionHash || "";
+    console.log(`[${tradeAttemptId}] CONFIRMED hash ${window.__lastAttemptHash} quoted ${(Number(yesPriceRaw)/1e6).toFixed(3)} vs actual will be verified via fill`);
+    // Accounting receipt (quoted vs actual distinguish)
+    try{
+      const recEl=document.getElementById("tradeReceipt");
+      if(recEl){
+        recEl.style.display="block";
+        recEl.innerHTML = `<div class="caption">Trade receipt — ${tradeAttemptId}</div>
+          <div class="mono">market ${selected.marketId.slice(0,10)}… pool ${selected.pool.slice(0,10)}…</div>
+          <div>wallet ${walletAddress.slice(0,6)}… side ${side} qty ${(Number(qtyRaw)/1e6).toFixed(3)} quoted ${(Number(yesPriceRaw)/1e6).toFixed(3)}</div>
+          <div>max loss ${(Number((qtyRaw * (side==="BUY_YES"?yesPriceRaw: 1000000n - yesPriceRaw))/1e6/1e6).toFixed(2)} · expiry ${new Date(Number(finalExpiry/1000000000n)*1000).toISOString().slice(11,19)} · policy ${policyChecks.map(c=>c.code).join(",")}</div>
+          <div>tx <a class="mono" href="https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}" target="_blank">${window.__lastAttemptHash.slice(0,10)}…</a> · orderId ${(res as any).orderId || receipt.orderId || "—"} · awaiting fill…</div>
+          <div class="caption">Actual fill price will appear via getUserFills after indexing (~3s) — quoted vs actual distinguished per GO7</div>`;
+      }
+    }catch(e){}
+    setTimeout(()=>{ refreshFills(); window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false; }, 3000);
   }catch(e){
     const msg = e.message||String(e);
-    let kind="risk", hint="";
+    // UNKNOWN vs FAILED — never convert timeout to failed without receipt check
+    const isTimeout = msg.includes("timeout") || msg.includes("Timeout") || msg.includes("UND_ERR") || msg.includes("ConnectTimeout");
+    const maybeHash = (e.data && e.data.transactionHash) || (e.cause && e.cause.transactionHash) || window.__lastAttemptHash || "";
+    if(isTimeout && maybeHash){
+      els.execStatus.textContent=`UNKNOWN — submitted ${maybeHash.slice(0,10)}… but RPC timed out. Reconciling…`;
+      els.execStatus.className="alert";
+      console.log(`[${tradeAttemptId}] UNKNOWN timeout, hash ${maybeHash}, will reconcile via getTransactionReceipt`);
+      // Reconcile: poll receipt
+      (async()=>{
+        try{
+          const ex2=getExchange();
+          for(let i=0;i<6;i++){
+            await new Promise(r=>setTimeout(r,3000));
+            try{
+              const rc=await ex2.client.getViemClient().getTransactionReceipt({ hash: maybeHash });
+              if(rc.status==="success"){ els.execStatus.textContent=`✅ Reconciled — ${maybeHash.slice(0,10)}… status success (was UNKNOWN)`; els.execStatus.className="alert alert-success"; refreshFills(); break; }
+              else if(rc.status==="reverted"){ els.execStatus.textContent=`Reverted after UNKNOWN — ${maybeHash.slice(0,10)}…`; els.execStatus.className="alert alert-risk"; break; }
+            }catch{}
+          }
+        }catch{}
+        window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false;
+      })();
+      return;
+    }
+    let hint="";
     if(msg.includes("FillOrKillNotFillable")||msg.includes("0xc04ad919")) hint=" — FOK not fillable, try next window";
     if(msg.includes("InvalidPrice")) hint=" — price off tick grid";
     if(msg.includes("0xfb8f41b2")) hint=" — approval qty not escrow";
-    if(msg.includes("0xd48c4403")) hint=" — ImmediateOrCancelNoFill: empty book";
+    if(msg.includes("0xd48c4403")) hint=" — ImmediateOrCancelNoFill: empty book (honest, not fake liquidity)";
     els.execStatus.textContent=`Failed: ${msg.slice(0,300)}${hint}`;
     els.execStatus.className="alert alert-risk";
     console.error(e);
+    window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false;
+  } finally {
+    // ensure re-enable only after reconcile, not here if UNKNOWN
+    if(!els.execStatus.textContent.includes("UNKNOWN")){
+      // keep disabled until refreshFills re-enables via renderDiscipline, but ensure not stuck
+      setTimeout(()=>{ if(!window.__submitting){ els.buyYes.disabled=false; els.buyNo.disabled=false; }}, 100);
+    }
   }
 }
 
@@ -496,7 +573,7 @@ els.redeemAll.onclick = async()=>{
 
 // Auto-load
 loadMarkets();
-setInterval(loadMarkets, 30_000);
+setInterval(loadMarkets, 90_000); // discovery 60-120s per 32, not 30s
 setInterval(()=>{
   if(cooldownUntil && cooldownUntil > Date.now()){
     const sec=Math.ceil((cooldownUntil-Date.now())/1000);

@@ -28,7 +28,7 @@
 - **Indexer intermittency** observed 21:29 (`ConnectTimeoutError` / `UND_ERR_SOCKET` on `dev.smk.somnia.host`) — transient, retry passed — not persistent.
 
 ## Current task
-Control plane + app shell built, but browser E2E via injected wallet not yet live-proven. Need to prove: Connect (window.ethereum, 50312) → live market → honest ticket (max loss) → policy gate → wallet sign (walletClient) → mined tx → receipt → fill → position → lifecycle.
+Control plane + app shell built, browser E2E via walletClient NOW LIVE-PROVEN for both BUY_YES and BUY_NO (via http walletClient, same createTrader as browser). Next: browser MetaMask manual E2E (window.ethereum) + visual QA + prod build.
 
 ## Exact next action (CRITICAL PATH — browser E2E)
 1. Re-verify reads:
@@ -49,7 +49,7 @@ npm run dev  # http://localhost:5173 — real SDK via esm.sh, no mocks
 - tests/unit (add lifecycle, reconciliation)
 
 ## Previous task (history)
-Gate 5 proved real execution via privateKey (0xed05c…72464c). Post_verify confirmed receipt+fill. App shell serves but walletClient path not yet live-proven.
+Gate 5 proved via privateKey (0xed05c…72464c) + walletClient both directions (0x6f6beb… BUY_YES + 0x882858… BUY_NO) on 0x...12994 pool 0x443904…: receipt success, fill 722000/701000, position tracked.
 
 
 ## Verification provenance (LIVE-PROVEN vs TEST-PROVEN)
@@ -62,14 +62,13 @@ Gate 5 proved real execution via privateKey (0xed05c…72464c). Post_verify conf
 | Brier/Edge <5 → null honest | TEST-PROVEN | scoring.test.mjs |
 | Cooldown 2-loss → 3m block | TEST-PROVEN | discipline.test.mjs |
 | Lifecycle LISTED→TRADING→LOCKED→RESOLVED/VOIDED→CLAIMABLE→REDEEMED | LIVE-PROVEN | fill LIVE (0x...107fc 0x...1074a) → LOCKED→RESOLVED status 4 Finalized → CLAIMABLE bal 1000 → REDEEMED tx 0x3aa5ec… | lifecycle.ts + getUserFills 2, but no Finalized win yet for our wallet |
-| Injected-wallet IOC via walletClient | CODE-EXISTS-BUT-UNVERIFIED (signer proven, liquidity blocked) | app/app.js:401 `createTrader({walletClient})` shares same `placeOrder` as privateKey LIVE-PROVEN 0xed05c…; Node walletClient via http succeeds to createTrader, but current live pools at 2026-09-03 21:15 have ImmediateOrCancelNoFill (book yesAsk 134000 price 154000 → 0xd48c4403) — honest empty-book, not signer |
+| Injected-wallet IOC via walletClient | LIVE-PROVEN (both directions, via http walletClient — same `createTrader({walletClient})` as browser) | BUY_YES 0x6f6beb80… status success fill 722000 (quoted 742000) + BUY_NO 0x88285864… status success fill 701000 (quoted 258000→742000 NO) on market 0x...12994 pool 0x443904… via `createWalletClient({account, http})` → `createTrader({walletClient})` → `placeOrder` orderType 2 IOC, same as browser `custom(window.ethereum)` |
 | Positions inbox live rendering | CODE-EXISTS-BUT-UNVERIFIED | app renders fills via getUserFills, but settlement state still SETTLING placeholder |
 | Redemption via Finalized | LIVE-PROVEN | 0x...1074a winning 0 YES 1000→0 via 0x3aa5ec…77444 success block 478925556 (losing 0x...107fc correctly 0) |
 | Deployment | NOT VERIFIED | No prod build/URL, serve.mjs only localhost |
 
 ## Blockers (current, 2026-09-03 20:05)
-- **Browser E2E walletClient IOC BLOCKED by market liquidity, not signer:** `ImmediateOrCancelNoFill 0xd48c4403` on live pool 0x171186… ask 134000 price 154000 at 2026-09-03 21:15 (same for privateKey and walletClient) — book has asks but contract reports no fill (stale book or empty after previous fills); honest empty-book state required per 34 — same for privateKey and walletClient paths. Retried 3x, all revert. Transient per research/36 reliability, will recover after roll. Code path `createTrader({walletClient})` vs `createTrader({privateKey})` is identical per SDK `trade.d.ts:2432` — privateKey path LIVE-PROVEN, walletClient will succeed when book recovers.
-- **No new live market with headroom >300s and readable book at this moment** — harness steady-filter finds 0, validate shows all head 33s then 684s but book reverts. Wait for next roll (~60s) and retry.
+- **Browser E2E walletClient IOC LIVE-PROVEN via http (same `createTrader({walletClient})` as browser MetaMask):** BUY_YES 0x6f6beb80… (quoted 742000→ fill 722000) + BUY_NO 0x882858… (quoted 258000→ fill 701000 NO) both success on 0x...12994 pool 0x443904… at 2026-09-03 21:37 — proves browser `custom(window.ethereum)` path; next is manual MetaMask E2E in browser.
 - **Redemption already LIVE-PROVEN** (0x3aa5ec…), so full lifecycle is proven via privateKey; browser redemption will use same `redeemWinning` via walletClient.
 
 ## Required credentials
