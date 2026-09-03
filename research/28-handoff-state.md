@@ -28,19 +28,44 @@
 - **Indexer intermittency** observed 21:29 (`ConnectTimeoutError` / `UND_ERR_SOCKET` on `dev.smk.somnia.host`) — transient, retry passed — not persistent.
 
 ## Current task
-Gate 5 proved real execution. Next is verification of position/order state (done via post_verify) then handoff to Phase 1 scaffolding.
+Control plane + app shell built, but browser E2E via injected wallet not yet live-proven. Need to prove: Connect (window.ethereum, 50312) → live market → honest ticket (max loss) → policy gate → wallet sign (walletClient) → mined tx → receipt → fill → position → lifecycle.
 
-## Exact next action
-1. Stop — handoff review before frontend. Do not start `app/` until reviewer confirms.
-2. After review, update `research/04-event-contracts.md` to note 60s/300s/1h windows live (not only 15m/1h) before hardcoding filter.
-3. Then re-verify reads before UI:
+## Exact next action (CRITICAL PATH — browser E2E)
+1. Re-verify reads:
 ```bash
 npm run validate
 ```
-4. Then scaffold per `research/24-implementation-plan.md`:
+2. Start app:
 ```bash
-# Next.js + wagmi + tailwind for Steady ticket (honest ticket + tilt guard, browser-safe env only)
+npm run dev  # http://localhost:5173 — real SDK via esm.sh, no mocks
 ```
+3. In browser with MetaMask on Shannon 50312 (import TEST_WALLET_PRIVATE_KEY burner or use separate), small max loss (e.g. 2 tUSDC) → Buy UP on BTC 3600 with >5m headroom → sign → capture tx hash → verify receipt success + fill via getUserFills → position appears LIVE → after lock, listPastBinaryMarkets Finalized → redeem → verify balance.
+4. Wire policy at boundary before trader.placeOrder: call lib/steady/discipline.deriveDiscipline with real settled outcomes, block with exact code/reason, disable button with tradeAttemptId, show quoted vs actual in receipt.
+5. Visual QA desktop + 375px, fix hierarchy/spacing per 30.
+
+## Files to touch next
+- app/app.js (wire discipline.ts, add tradeAttemptId, disable SUBMITTING, structured logs)
+- lib/steady/discipline.ts (already pure, integrate real outcomes)
+- tests/unit (add lifecycle, reconciliation)
+
+## Previous task (history)
+Gate 5 proved real execution via privateKey (0xed05c…72464c). Post_verify confirmed receipt+fill. App shell serves but walletClient path not yet live-proven.
+
+
+## Verification provenance (LIVE-PROVEN vs TEST-PROVEN)
+
+| Flow | Provenance | Evidence |
+|------|------------|----------|
+| SDK create + listLiveBinaryMarkets + getMarketOnchain + getBinaryOrderBook + getBinaryBookParams | LIVE-PROVEN | Gates 1-4 PASS 2026-09-03 19:26 (14 live, Trading) |
+| Faucet + IOC via privateKey | LIVE-PROVEN | Tx 0xb0bd7bb1…908e46 + 0xed05c…72464c block 477265538 fill 21000 |
+| Ticket max-loss→qty/pay (pure) | TEST-PROVEN | 13/13 unit PASS (ticket, scoring, discipline) |
+| Brier/Edge <5 → null honest | TEST-PROVEN | scoring.test.mjs |
+| Cooldown 2-loss → 3m block | TEST-PROVEN | discipline.test.mjs |
+| Lifecycle LISTED→TRADING→LOCKED→RESOLVED/VOIDED→CLAIMABLE→REDEEMED | TEST-PROVEN (unit) + PARTIALLY LIVE (fill proves LIVE, settlement not yet Finalized for our market) | lifecycle.ts + getUserFills 2, but no Finalized win yet for our wallet |
+| Injected-wallet IOC via walletClient | CODE-EXISTS-BUT-UNVERIFIED | app/app.js:execute() uses createTrader({walletClient}), but not yet mined via MetaMask |
+| Positions inbox live rendering | CODE-EXISTS-BUT-UNVERIFIED | app renders fills via getUserFills, but settlement state still SETTLING placeholder |
+| Redemption via Finalized | CODE-EXISTS-BUT-UNVERIFIED | app redeemAll lists Finalized, but no claimable proven for our wallet |
+| Deployment | NOT VERIFIED | No prod build/URL, serve.mjs only localhost |
 
 ## Blockers
 - **None for integration foundation.** Gate 5 passed with real mined tx. Frontend may be unblocked after this handoff.
@@ -83,6 +108,9 @@ npm run validate
 ## Tests failed / skipped
 - Gate 5 at 20:51 FTK fail — **not counted as protocol failure** — was harness bug (FOK + non-cross). Fixed and re-passed at 21:54.
 - No other failures. `getOutcomeBalance` probe via `oc.outcomeToken` hit `Address "undefined"` — need to use correct field (`outcomeToken` vs `outcomeTokenAddress`); not blocking for gate (fills prove position), to be fixed in product layer with proper SDK helper.
+
+## Cairn verification (31b)
+- 7 ADOPTED (gate, receipt, provenance, real-vs-mock, machine-readable state, critical tests, framework-free engine), 3 PARTIALLY (gate at boundary, independent verify), 3 REJECTED Sui-specific (Walrus/Seal/MCP) — see research/31b
 
 ## Files changed (this handoff)
 - `scripts/validate/validate.mjs` — fixed `orderType 1→2` + crossing price `bestAsk+0.02` snapped (after FillOrKillNotFillable classification)
