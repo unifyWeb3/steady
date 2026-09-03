@@ -29,8 +29,8 @@ try {
   const oc = await exchange.client.getMarketOnchain(marketId);
   console.log("MarketOnchain after:", "status", oc.status, "pool", oc.pool, "yesId", oc.yesId?.toString().slice(0,30), "noId", oc.noId?.toString().slice(0,30), "outcomeToken", oc.outcomeToken);
   try {
-    const balYes = await exchange.client.getOutcomeBalance({ outcomeToken: oc.outcomeToken, owner: traderAddr, id: oc.yesId });
-    const balNo = await exchange.client.getOutcomeBalance({ outcomeToken: oc.outcomeToken, owner: traderAddr, id: oc.noId });
+    const balYes = await exchange.client.getOutcomeBalance({ outcomeToken: oc.outcomeToken, account: traderAddr, id: oc.yesId });
+    const balNo = await exchange.client.getOutcomeBalance({ outcomeToken: oc.outcomeToken, account: traderAddr, id: oc.noId });
     console.log("Outcome balances YES:", balYes.toString(), "NO:", balNo.toString());
   } catch(e){ console.log("getOutcomeBalance failed", e.message); }
 } catch(e){ console.log("getMarketOnchain failed", e.message); }

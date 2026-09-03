@@ -1,7 +1,7 @@
 // lib/dreamdex/redemption.ts — real redemption, no fake claim
 import type { DreamDexClient } from "./client";
 
-export async function getClaimableForAccount(client: DreamDexClient, owner: `0x${string}`) {
+export async function getClaimableForAccount(client: DreamDexClient, account: `0x${string}`) {
   // Use derivedReads claimableFrom if available, else manual via outcome balances on Finalized markets
   // Keep integration thin: caller will call trader.redeem per market
   const past = await client.client.listPastBinaryMarkets({ status: "Finalized" as any, limit: 20 });
