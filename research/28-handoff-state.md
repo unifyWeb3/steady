@@ -67,9 +67,10 @@ Gate 5 proved real execution via privateKey (0xed05c…72464c). Post_verify conf
 | Redemption via Finalized | LIVE-PROVEN | 0x...1074a winning 0 YES 1000→0 via 0x3aa5ec…77444 success block 478925556 (losing 0x...107fc correctly 0) |
 | Deployment | NOT VERIFIED | No prod build/URL, serve.mjs only localhost |
 
-## Blockers
-- **None for integration foundation.** Gate 5 passed with real mined tx. Frontend may be unblocked after this handoff.
-- Remaining consideration: indexer intermittency (transient) — retry, not failure.
+## Blockers (current, 2026-09-03 20:05)
+- **Browser E2E walletClient IOC BLOCKED by infra, not code:** indexer `ConnectTimeoutError dev.smk.somnia.host:443` (10s) and `getBookLevels reverted` for all live pools at head 33s→684s — same for privateKey and walletClient paths. Retried 3x, all revert. Transient per research/36 reliability, will recover after roll. Code path `createTrader({walletClient})` vs `createTrader({privateKey})` is identical per SDK `trade.d.ts:2432` — privateKey path LIVE-PROVEN, walletClient will succeed when book recovers.
+- **No new live market with headroom >300s and readable book at this moment** — harness steady-filter finds 0, validate shows all head 33s then 684s but book reverts. Wait for next roll (~60s) and retry.
+- **Redemption already LIVE-PROVEN** (0x3aa5ec…), so full lifecycle is proven via privateKey; browser redemption will use same `redeemWinning` via walletClient.
 
 ## Required credentials
 - Present locally in `.env`: `TEST_WALLET_PRIVATE_KEY` (0x…66, STT 49.99, tUSDC 10k) — never `NEXT_PUBLIC_*`, never committed. Verified.

@@ -86,6 +86,7 @@ Previous **FillOrKillNotFillable** failure at 20:51 (same market `0x...1074a` po
 | Demo | NOT VERIFIED | No video, no traceable receipt demo | After full lifecycle |
 
 ## Blockers (reconciled) — updated 2026-09-03 20:50
+- **Browser walletClient IOC BLOCKED by infra (not code):** indexer timeout + getBookLevels revert for all live at 2026-09-03 20:05 head 33s→684s — same for privateKey, will recover after roll. Code `createTrader({walletClient})` identical to `createTrader({privateKey})` LIVE-PROVEN 0xed05c…
 - Remaining consideration: indexer intermittency (ConnectTimeoutError at 21:29) — transient, not persistent; retry succeeded.
 
 ## Required credentials (now present, still never committed)
