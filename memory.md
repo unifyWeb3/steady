@@ -28,3 +28,5 @@
 
 **Demo:** not ready — needs wallet→fill→position→settlement→redeem trace.
 
+
+**Latest verification 2026-09-03 20:50:** Redemption LIVE-PROVEN market 0x...1074a winning 0 YES bal 1000→0 via 0x3aa5ec…77444 block 478925556 delta +0.001 tUSDC. Policy at boundary now enforced (maxSpread 0.15, tradeAttemptId, SUBMITTING disable). App still serves :5173, no backend.

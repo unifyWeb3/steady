@@ -61,10 +61,10 @@ Gate 5 proved real execution via privateKey (0xed05c…72464c). Post_verify conf
 | Ticket max-loss→qty/pay (pure) | TEST-PROVEN | 13/13 unit PASS (ticket, scoring, discipline) |
 | Brier/Edge <5 → null honest | TEST-PROVEN | scoring.test.mjs |
 | Cooldown 2-loss → 3m block | TEST-PROVEN | discipline.test.mjs |
-| Lifecycle LISTED→TRADING→LOCKED→RESOLVED/VOIDED→CLAIMABLE→REDEEMED | TEST-PROVEN (unit) + PARTIALLY LIVE (fill proves LIVE, settlement not yet Finalized for our market) | lifecycle.ts + getUserFills 2, but no Finalized win yet for our wallet |
+| Lifecycle LISTED→TRADING→LOCKED→RESOLVED/VOIDED→CLAIMABLE→REDEEMED | LIVE-PROVEN | fill LIVE (0x...107fc 0x...1074a) → LOCKED→RESOLVED status 4 Finalized → CLAIMABLE bal 1000 → REDEEMED tx 0x3aa5ec… | lifecycle.ts + getUserFills 2, but no Finalized win yet for our wallet |
 | Injected-wallet IOC via walletClient | CODE-EXISTS-BUT-UNVERIFIED | app/app.js:execute() uses createTrader({walletClient}), but not yet mined via MetaMask |
 | Positions inbox live rendering | CODE-EXISTS-BUT-UNVERIFIED | app renders fills via getUserFills, but settlement state still SETTLING placeholder |
-| Redemption via Finalized | CODE-EXISTS-BUT-UNVERIFIED | app redeemAll lists Finalized, but no claimable proven for our wallet |
+| Redemption via Finalized | LIVE-PROVEN | 0x...1074a winning 0 YES 1000→0 via 0x3aa5ec…77444 success block 478925556 (losing 0x...107fc correctly 0) |
 | Deployment | NOT VERIFIED | No prod build/URL, serve.mjs only localhost |
 
 ## Blockers
@@ -104,6 +104,7 @@ Gate 5 proved real execution via privateKey (0xed05c…72464c). Post_verify conf
 - Gate 4b getBinaryBookParams — PASS (tick/lot 1000)
 - Gate 5 placeOrder IOC — PASS (real tx success + fill verified)
 - Post-verify: receipt success, logs 8, `getUserFills` 2, fillPrice 21000, Explorer reachable
+- Redemption — LIVE-PROVEN 2026-09-03 20:50: market 0x...1074a winning 0 YES bal 1000→0 via 0x3aa5ec…77444 success block 478925556 gas 272707 delta +0.001 tUSDC
 
 ## Tests failed / skipped
 - Gate 5 at 20:51 FTK fail — **not counted as protocol failure** — was harness bug (FOK + non-cross). Fixed and re-passed at 21:54.

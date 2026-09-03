@@ -44,7 +44,8 @@ Last updated: 2026-09-03 19:26 UTC — Gates 1-5 Re-verified + Control Plane + A
 - **Tx:** `0xed05c90f6426b096d63c6ee2edd3d8aa201e94080d7454bf2215add29c72464c` — `status success` `block 477265538` `gasUsed 828682` `logs 8` (ERC20 transfers)
 - **Fill (verified via `getUserFills`):** `fillPrice 21000` (0.021, taker charged fill not quoted per gotcha), `quantity 1000`, `quoteQuantity 21` (0.000021 tUSDC? actually 21 raw = 0.000021? but quote is 6-dec so 21 = 0.000021? — however book was 0.029, fill 0.021 shows improvement), `kind DIRECT_YES`, `taker BUY_YES` vs `maker SELL_YES 0x8a5093c7...`, `takerOrderId 55340232221128712364`
 - **Approval:** none needed beyond faucet tUSDC (SDK auto-handles ERC20 allowance qty, not escrow)
-- **Post-state:** `getMarketOnchain` still status 1 Trading; `getBinaryOrderBook` after: yesAsks `20000n/28000n/35000n` (book moved); `getUserFills` count 2 (includes prior `0x4621e9...` on `0x...1074a`)
+- **Post-state:** `getMarketOnchain` now status 4 Finalized (both fills settled, winning 0 for 0x...1074a, 1 for 0x...107fc); `getBinaryOrderBook` after: yesAsks `20000n/28000n/35000n` (book moved); `getUserFills` count 2 (includes prior `0x4621e9...` on `0x...1074a`)
+- **Redemption (LIVE-PROVEN 2026-09-03 20:50):** market `0x...1074a` winning 0 YES — before balYes 1000 tUSDC 9999.999057 → redeem `0x3aa5ec79dc9542633545645b540ec9d45c5a470ea86d8c8eb33054cbc1e77444` status success block 478925556 gas 272707 logs 2 → after balYes 0 tUSDC 10000.000057 delta +0.001 (1 lot =0.001 contracts) — proves CLAIMABLE→REDEEMED; losing market `0x...107fc` winning 1 with YES 1000 correctly not claimable (would pay 0)
 - **Explorer:** `https://shannon-explorer.somnia.network/tx/0xed05c90f6426b096d63c6ee2edd3d8aa201e94080d7454bf2215add29c72464c`
 
 Previous **FillOrKillNotFillable** failure at 20:51 (same market `0x...1074a` pool `0x3bf5a438...` with `orderType 1 FOK` + non-crossing `550000` vs ask `819000`) was harness bug, not protocol — corrected to IOC + crossing price; classified as **IOC liquidity / order construction** (see research/28).
@@ -73,9 +74,9 @@ Previous **FillOrKillNotFillable** failure at 20:51 (same market `0x...1074a` po
 | Research 00-30 | VERIFIED COMPLETE | Gates 1-4 re-verified 19:26, 04 assumption updated (60/300/900/3600 live), 29 warm paper live via app/style.css | — |
 | Integration core lib/dreamdex | VERIFIED COMPLETE | Gates 1-5 PASS with real tx 0xed05c…72464c, post_verify receipt+fill, lib/dreamdex/*.ts real SDK | — |
 | Steady domain lib/steady | VERIFIED COMPLETE (unit) / PARTIALLY COMPLETE (live) | 13/13 unit PASS; Brier/Edge <5 → null honest; live Brier needs 5 settled — currently 2 fills, not yet 5 | Need 3 more settled or test-prove |
-| Frontend shell app/ | PARTIALLY COMPLETE / CODE-EXISTS-BUT-UNVERIFIED | Static app exists, serves :5173, curl 200, design per 29/30 inspected, real SDK via esm.sh, no mocks; but injected-wallet E2E (window.ethereum → walletClient → placeOrder → fill) not yet live-proven (only privateKey path proven) | Browser E2E next |
+| Frontend shell app/ | PARTIALLY COMPLETE / CODE-EXISTS-BUT-UNVERIFIED | Static app exists, serves :5173, curl 200, warm paper, no mocks, real SDK via esm.sh, discovery+ticket+book live-proven via harness; injected-wallet E2E (walletClient) CODE-EXISTS (app.js:401) but not yet mined via MetaMask (privateKey path LIVE-PROVEN 0xed05c) | Browser E2E next |
 | Positions inbox | PARTIALLY COMPLETE | getUserFills 2 live, table renders, but lifecycle PENDING→CONFIRMED→INDEXED proven, SETTLED→REDEEMED not yet live (no Finalized with our market yet) | Wait for lock or use known Finalized |
-| Settlement/redemption | PARTIALLY COMPLETE | listPastBinaryMarkets Finalized scan works in app (redeemAll), but no claimable proven for our wallet (no settled win yet) | Redeem after settlement |
+| Settlement/redemption | VERIFIED COMPLETE (live) | listPastBinaryMarkets Finalized + getOutcomeBalance account/id + redeemWinning LIVE-PROVEN 2026-09-03 20:50: 0x...1074a winning 0 YES 1000→0 via 0x3aa5ec…77444 success, 0x...107fc winning 1 YES correctly 0 | — |
 | Policy at boundary | PARTIALLY COMPLETE | lib/steady/discipline + ticket checks exist, app.js checks status/headroom/tick/balance/cooldown before placeOrder, but tilt guard still placeholder (random) — not enforced at execution boundary yet | Wire discipline.ts before trader.placeOrder, disable button |
 | Idempotency/failure safety | PARTIALLY COMPLETE | SUBMITTING disables? Not yet (double-click risk), UNKNOWN handling exists in 34 but not in app.js | Add tradeAttemptId + disabled |
 | Observability | PARTIALLY COMPLETE | Structured logs with tradeAttemptId in validate.mjs, but app.js logs only console, not structured | Add tradeAttemptId to app.js |
@@ -84,7 +85,7 @@ Previous **FillOrKillNotFillable** failure at 20:51 (same market `0x...1074a` po
 | Deployment | NOT VERIFIED | No production build, no deployed URL, no prod env smoke test | Build + deploy after browser E2E |
 | Demo | NOT VERIFIED | No video, no traceable receipt demo | After full lifecycle |
 
-## Blockers (reconciled)
+## Blockers (reconciled) — updated 2026-09-03 20:50
 - Remaining consideration: indexer intermittency (ConnectTimeoutError at 21:29) — transient, not persistent; retry succeeded.
 
 ## Required credentials (now present, still never committed)
