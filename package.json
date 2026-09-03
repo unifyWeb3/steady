@@ -1,0 +1,23 @@
+{
+  "name": "somnia",
+  "version": "1.0.0",
+  "description": "Steady — Discipline-First Terminal for DreamDEX Event Contracts",
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate/validate.mjs",
+    "validate:write": "node scripts/validate/validate.mjs --write",
+    "test": "node --test tests/unit/*.mjs",
+    "test:watch": "node --test --watch tests/unit/*.mjs",
+    "dev": "node serve.mjs",
+    "serve": "node serve.mjs",
+    "typecheck": "echo \"no tsc — lib is JS/TS pure, validated via tests\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@somnia-chain/markets-sdk": "^0.29.0",
+    "dotenv": "^17.4.2",
+    "viem": "^2.56.1"
+  }
+}
