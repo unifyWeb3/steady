@@ -4,7 +4,7 @@
 
 **Architecture:** Browser → SDK (SomniaMarkets 0.29.0, SOMNIA_TESTNET_ADDRESSES) → indexer dev.smk + WS wss://api.infra.testnet.somnia.network/ws → chain. No backend/DB; lib/dreamdex (real SDK) + lib/steady (pure) + app/ (warm paper static via esm.sh, window.ethereum). See research/31.
 
-**Phase:** Phase 1 live, gates 1-5 PASS re-verified 2026-09-03 19:26. App shell live :5173, 13 unit tests PASS.
+**Phase:** Phase 1 reliability fix 2026-09-04. Gates 1-4 re-PASS (node). Unit 13/13 PASS. Browser: homepage PASS, terminal shell+timeout PASS, mock-Rabby connect PASS (chromium). Real popup signing CODE-EXISTS-BUT-UNVERIFIED.
 
 **Verified protocol:** listLiveBinaryMarkets 14 live (60/300/900/3600 BTC/ETH), getMarketOnchain status 1 Trading, getBinaryOrderBook 0.751/0.777 spread, tick/lot 1000, IOC 2 with expire nanos, faucet 10k tUSDC.
 

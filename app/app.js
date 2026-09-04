@@ -1,11 +1,28 @@
 // Steady app.js — real SDK, no mocks, discipline-first
-import { SomniaMarkets, SOMNIA_TESTNET_ADDRESSES } from "@somnia-chain/markets-sdk";
-import { somniaShannon } from "@somnia-chain/markets-sdk/chains";
-import { createWalletClient, custom, createPublicClient, http } from "viem";
-
+// Shell boots WITHOUT waiting for SDK: SDK lazy-loads via dynamic import with
+// timeout, so esm.sh slowness (~10s) or indexer outage never blanks the app.
+// See research/32-control-plane.md (decoupled shell → data services → real data or explicit error).
 const INDEXER_URL = "https://dev.smk.somnia.host/v1/graphql";
 const WS_URL = "wss://api.infra.testnet.somnia.network/ws";
 const ONE_6 = 1_000_000n;
+
+let _sdk = null; // { SomniaMarkets, SOMNIA_TESTNET_ADDRESSES, somniaShannon, viem }
+let _sdkError = null;
+function loadSdk(timeoutMs = 30000){
+  if(_sdk) return Promise.resolve(_sdk);
+  if(_sdkError) return Promise.reject(_sdkError);
+  const p = (async()=>{
+    const [sdk, chains, viem] = await Promise.all([
+      import("@somnia-chain/markets-sdk"),
+      import("@somnia-chain/markets-sdk/chains"),
+      import("viem"),
+    ]);
+    _sdk = { SomniaMarkets: sdk.SomniaMarkets, SOMNIA_TESTNET_ADDRESSES: sdk.SOMNIA_TESTNET_ADDRESSES, somniaShannon: chains.somniaShannon, viem };
+    return _sdk;
+  })();
+  const t = new Promise((_,rej)=>setTimeout(()=>rej(new Error(`SDK import timeout after ${timeoutMs}ms — esm.sh slow/blocked, Retry`)), timeoutMs));
+  return Promise.race([p, t]).catch(e=>{ _sdkError = e; throw e; });
+}
 
 const els = {
   statusBar: document.getElementById("statusBar"),
@@ -52,18 +69,19 @@ let fillsCache = []; // settled + open
 let cooldownUntil = null;
 let marketsCache = [];
 
-// Init SDK (reads, no key)
-function getExchange() {
-  if (!exchange) {
-    exchange = new SomniaMarkets({
-      indexerUrl: INDEXER_URL,
-      chain: somniaShannon,
-      wsRpcUrl: WS_URL,
-      addresses: SOMNIA_TESTNET_ADDRESSES,
-    });
-  }
+// Init SDK (reads, no key) — async: waits for lazy SDK load
+async function getExchange() {
+  if (exchange) return exchange;
+  const sdk = await loadSdk();
+  exchange = new sdk.SomniaMarkets({
+    indexerUrl: INDEXER_URL,
+    chain: sdk.somniaShannon,
+    wsRpcUrl: WS_URL,
+    addresses: sdk.SOMNIA_TESTNET_ADDRESSES,
+  });
   return exchange;
 }
+function getSdkAddrs(){ return _sdk ? _sdk.SOMNIA_TESTNET_ADDRESSES : null; }
 
 function fmtExpiry(expirySec) {
   const now = Math.floor(Date.now()/1000);
@@ -80,12 +98,41 @@ function setStatus(msg, kind=""){
   els.statusBar.className = kind ? `alert alert-${kind}` : "alert";
 }
 
-// Discovery — >60s headroom (Steady may use 60, but ticket enforces >60 before sign)
+// Discovery — >60s headroom, with timeout and decoupled shell (app shell renders even if indexer hangs)
 async function loadMarkets(){
-  const ex = getExchange();
-  els.marketTbody.innerHTML = `<tr><td colspan="6" class="empty">Loading…</td></tr>`;
+  els.marketTbody.innerHTML = `<tr><td colspan="6" class="empty">Loading live markets…</td></tr>`;
+  setStatus("Loading SDK…", "");
+  els.marketCount.textContent = "loading";
+  let stillLoading = true;
+  const fallback = setTimeout(()=>{
+    if(stillLoading){
+      els.marketTbody.innerHTML = `<tr><td colspan="6" class="empty">
+        <div style="padding:16px;display:grid;gap:12px;justify-items:center">
+          <div class="caption">Market data unavailable</div>
+          <div style="font-size:13px;color:var(--ink-2)">Indexer timed out after 12s — check network, then retry</div>
+          <button class="btn btn-secondary" data-retry="1" onclick="window.loadMarkets&&window.loadMarkets()" style="height:32px">Retry</button>
+          <div class="caption">App shell remains usable — wallet, ticket, and positions work without live markets</div>
+        </div>
+      </td></tr>`;
+      els.marketCount.textContent = "error";
+      setStatus("Market data timeout — retry available", "risk");
+    }
+  }, 13000);
+  const controller = new AbortController();
+  const timeout = setTimeout(()=>controller.abort(), 12000);
   try{
-    const live = await ex.client.listLiveBinaryMarkets({ limit: 50 });
+    let ex;
+    try{ ex = await getExchange(); }
+    catch(sdkErr){ throw new Error(`SDK load failed: ${(sdkErr&&sdkErr.message)||sdkErr} — esm.sh slow/blocked, Retry`); }
+    setStatus("Loading live markets…", "");
+    const livePromise = ex.client.listLiveBinaryMarkets({ limit: 50 });
+    const live = await Promise.race([
+      livePromise,
+      new Promise((_,rej)=> setTimeout(()=>rej(new Error("Indexer timeout after 12s — retry")), 12000))
+    ]);
+    clearTimeout(timeout);
+    clearTimeout(fallback);
+    stillLoading = false;
     const now = Math.floor(Date.now()/1000);
     const eligible = [];
     for(const m of live){
@@ -145,9 +192,21 @@ async function loadMarkets(){
     }
     setStatus(`Live: ${display.length} Trading windows with >60s headroom (BTC/ETH 1m/5m/15m/1h)`, "success");
   }catch(e){
+    clearTimeout(timeout);
     const msg = e.message||String(e);
-    els.marketTbody.innerHTML = `<tr><td colspan="6" class="empty">Indexer error: ${msg.slice(0,200)} — retrying</td></tr>`;
-    setStatus(`Indexer error: ${msg.slice(0,120)} — will retry`, "risk");
+    const isTimeout = msg.includes("timeout") || msg.includes("Timeout") || e.name==="AbortError";
+    els.marketTbody.innerHTML = `<tr><td colspan="6" class="empty">
+      <div style="padding:16px;display:grid;gap:12px;justify-items:center">
+        <div class="caption">Market data unavailable</div>
+        <div style="font-size:13px;color:var(--ink-2)">${isTimeout ? "Indexer timed out after 12s" : `Indexer error: ${msg.slice(0,120)}`}</div>
+        <button class="btn btn-secondary" data-retry="1" onclick="window.loadMarkets&&window.loadMarkets()" style="height:32px">Retry</button>
+        <div class="caption">App shell remains usable — wallet, ticket, and positions work without live markets</div>
+      </div>
+    </td></tr>`;
+    els.marketCount.textContent = "error";
+    setStatus(isTimeout ? "Market data timeout — retry available" : `Market data error — ${msg.slice(0,80)}`, "risk");
+    // schedule retry in 15s, but don't block shell
+    setTimeout(()=>{ if(document.visibilityState==="visible") loadMarkets(); }, 15000);
   }
 }
 
@@ -156,8 +215,8 @@ async function selectMarket(m){
   els.ticketMarket.textContent = `${m.asset} ${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h"} · expiry ${new Date(m.expirySec*1000).toISOString().slice(11,16)} · ${m.marketId.slice(0,10)}… · pool ${m.pool.slice(0,10)}…`;
   els.ticketMarket.title = m.marketId;
   // fetch book + params
-  const ex = getExchange();
   try{
+    const ex = await getExchange();
     book = await ex.client.getBinaryOrderBook(m.pool, { depth: 5 });
     bookParams = await ex.client.getBinaryBookParams(m.pool);
     updatePreview();
@@ -210,38 +269,56 @@ function updatePreview(){
   els.previewCapped.textContent = "";
 }
 
-// Wallet
+// Wallet — Rabby/MetaMask compatible, handles providers array
+function getInjectedProvider(){
+  const eth = window.ethereum;
+  if(!eth) return null;
+  // Rabby may inject providers array
+  if(eth.providers && Array.isArray(eth.providers)){
+    // prefer Rabby if present, else first
+    const rabby = eth.providers.find(p=>p.isRabby);
+    return rabby || eth.providers[0] || eth;
+  }
+  return eth;
+}
 async function connect(){
-  if (!window.ethereum) { alert("No injected wallet — install MetaMask"); return; }
+  const provider = getInjectedProvider();
+  if (!provider) { alert("No injected wallet — install Rabby or MetaMask"); return; }
+  els.connectBtn.disabled = true;
+  setStatus("Connecting wallet…", "");
   try{
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const accounts = await provider.request({ method: "eth_requestAccounts" });
     walletAddress = accounts[0];
     els.walletAddr.textContent = walletAddress.slice(0,6)+"…"+walletAddress.slice(-4);
     els.connectBtn.textContent = "Connected";
     // check chain
-    const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
+    const chainIdHex = await provider.request({ method: "eth_chainId" });
     const chainId = parseInt(chainIdHex,16);
     if (chainId!==50312){
-      try{ await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{ chainId:"0xc488" }] }); }catch{
-        await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{ chainId:"0xc488", chainName:"Somnia Testnet", rpcUrls:["https://api.infra.testnet.somnia.network"], blockExplorerUrls:["https://shannon-explorer.somnia.network"], nativeCurrency:{ name:"STT", symbol:"STT", decimals:18 } }] });
+      try{ await provider.request({ method:"wallet_switchEthereumChain", params:[{ chainId:"0xc488" }] }); }catch{
+        await provider.request({ method:"wallet_addEthereumChain", params:[{ chainId:"0xc488", chainName:"Somnia Testnet", rpcUrls:["https://api.infra.testnet.somnia.network"], blockExplorerUrls:["https://shannon-explorer.somnia.network"], nativeCurrency:{ name:"STT", symbol:"STT", decimals:18 } }] });
       }
     }
-    walletClient = createWalletClient({ chain: somniaShannon, transport: custom(window.ethereum), account: walletAddress });
+    const sdk0 = await loadSdk();
+    walletClient = sdk0.viem.createWalletClient({ chain: sdk0.somniaShannon, transport: sdk0.viem.custom(provider), account: walletAddress });
     // fetch tUSDC for honest ticket capping
     try{
-      const ex2 = getExchange();
-      const bal = await ex2.client.getErc20Balance(SOMNIA_TESTNET_ADDRESSES.collateral, walletAddress);
+      const ex2 = await getExchange();
+      const bal = await ex2.client.getErc20Balance(sdk0.SOMNIA_TESTNET_ADDRESSES.collateral, walletAddress);
       window.__tUSDCBalance = bal;
       setStatus(`Connected ${walletAddress.slice(0,6)}… on 50312 — tUSDC ${(Number(bal)/1e6).toFixed(2)} — fetching fills…`, "success");
     }catch(e){ window.__tUSDCBalance = 10_000_000n * 1000n; setStatus(`Connected ${walletAddress.slice(0,6)}… on 50312 — fetching fills…`, "success"); }
     await refreshFills();
   }catch(e){ setStatus(`Connect failed: ${e.message}`, "risk"); }
+  finally{ els.connectBtn.disabled = false; }
 }
 
 // Fills + scoring + discipline
 async function refreshFills(){
   if(!walletAddress) return;
-  const ex = getExchange();
+  let ex;
+  try{ ex = await getExchange(); }
+  catch(e){ console.error("refreshFills SDK unavailable:", e.message); return; }
   try{
     const fills = await ex.client.getUserFills(walletAddress, { since: 0, limit: 50 });
     fillsCache = fills;
@@ -306,7 +383,9 @@ function renderScore(){
   els.scoreDetail.textContent = `Fills found: ${fillsCache.length}. Resolving outcomes via market settlement…`;
   // Attempt to fetch quickly for last 5
   (async()=>{
-    const ex=getExchange();
+    let ex;
+    try{ ex = await getExchange(); }
+    catch(e){ els.brierVal.textContent="— SDK unavailable"; return; }
     const calls=[];
     for(const f of fillsCache.slice(0,5)){
       try{
@@ -392,40 +471,50 @@ function renderDiscipline(calls){
 window.__lastSettledCalls = [];
 
 
-// Execution — real IOC via walletClient
+// Execution — real IOC via walletClient. Single authoritative write boundary:
+// every trader.placeOrder call in this app goes through here, after policy evaluation.
 async function execute(side){
-  const tradeAttemptId = 'steady-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
-  console.log(`[${tradeAttemptId}] intent`, { side, maxLoss, marketId: selected.marketId });
-  els.buyYes.disabled=true; els.buyNo.disabled=true; els.execStatus.style.display='block';
+  if(window.__submitting){ els.execStatus.style.display='block'; els.execStatus.textContent="Already submitting — wait for receipt (no duplicate)"; els.execStatus.className="alert"; return; }
   if(!selected){ alert("Select a market first"); return; }
   if(!walletAddress || !walletClient){ alert("Connect wallet first"); return; }
   if(!els.confirmBox.checked){ alert("Confirm max loss understanding"); return; }
   const maxLoss = Number(els.maxLoss.value);
   if(!maxLoss || maxLoss<=0){ alert("Enter max loss"); return; }
-  // cooldown check
+  const tradeAttemptId = 'steady-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
+  console.log(`[${tradeAttemptId}] intent`, { side, maxLoss, marketId: selected.marketId });
+  window.__submitting = true;
+  els.buyYes.disabled=true; els.buyNo.disabled=true; els.execStatus.style.display='block';
+  // cooldown check — real discipline state, not placeholder
   if (cooldownUntil && cooldownUntil > Date.now()){
-    alert(`Cooldown active — wait ${Math.ceil((cooldownUntil-Date.now())/1000)}s`);
+    const secs = Math.ceil((cooldownUntil-Date.now())/1000);
+    els.execStatus.textContent=`Policy blocked: COOLDOWN — ${secs}s remaining (2 consecutive losses)`;
+    els.execStatus.className="alert alert-risk";
+    window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false;
     return;
   }
-  const ex = getExchange();
+  let ex;
+  try{ ex = await getExchange(); }
+  catch(sdkErr){ els.execStatus.textContent=`SDK unavailable: ${(sdkErr&&sdkErr.message)||sdkErr}`; els.execStatus.className="alert alert-risk"; window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false; return; }
   els.execStatus.style.display="block";
   els.execStatus.textContent = "Checking market status…";
   els.execStatus.className="alert";
+  const _resetSubmit = ()=>{ window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false; };
   try{
     const oc = await ex.client.getMarketOnchain(selected.marketId);
-    if (oc.status!==1){ els.execStatus.textContent=`Market not Trading (status ${oc.status}) — picking next window`; els.execStatus.className="alert alert-risk"; await loadMarkets(); return; }
+    if (oc.status!==1){ els.execStatus.textContent=`Market not Trading (status ${oc.status}) — picking next window`; els.execStatus.className="alert alert-risk"; await loadMarkets(); _resetSubmit(); return; }
     const expirySec = Number(selected.expirySec);
-    if (expirySec - Math.floor(Date.now()/1000) < 60){ els.execStatus.textContent="Market locks in <60s — choose next window"; els.execStatus.className="alert alert-risk"; return; }
+    if (expirySec - Math.floor(Date.now()/1000) < 60){ els.execStatus.textContent="Market locks in <60s — choose next window"; els.execStatus.className="alert alert-risk"; _resetSubmit(); return; }
     const params = await ex.client.getBinaryBookParams(selected.pool);
     const tick = BigInt(params.tickSize), lot = BigInt(params.lotSize), minQty = BigInt(params.minQuantity);
     const bookNow = await ex.client.getBinaryOrderBook(selected.pool, { depth: 5 });
+    if (!bookNow.yesAsks?.length && !bookNow.yesBids?.length){ els.execStatus.textContent="Empty book — no liquidity on either side (honest, not fake). Try next window."; els.execStatus.className="alert alert-risk"; _resetSubmit(); return; }
     const bestAskRaw = bookNow.yesAsks?.[0]?.price ? BigInt(bookNow.yesAsks[0].price) : 500_000n;
     // For BUY_NO, price is inverted? SDK expects YES price always — BUY_NO price = ONE - yesPrice? But we use BUY_YES/BUY_NO side handling: SDK price is always YES price. For BUY_NO at 0.45 prob, YES price = 0.55. So we map.
     let yesPriceRaw;
     if (side==="BUY_YES") yesPriceRaw = (bestAskRaw + 20000n);
     else yesPriceRaw = 1_000_000n - (bestAskRaw + 20000n); // approximate
     yesPriceRaw = (yesPriceRaw / tick) * tick;
-    if (yesPriceRaw<=0n || yesPriceRaw>=ONE_6){ els.execStatus.textContent=`Invalid price ${yesPriceRaw} after tick snap`; return; }
+    if (yesPriceRaw<=0n || yesPriceRaw>=ONE_6){ els.execStatus.textContent=`Invalid price ${yesPriceRaw} after tick snap`; els.execStatus.className="alert alert-risk"; _resetSubmit(); return; }
     // qty from maxLoss: qty = maxLoss / (side price)
     // Policy gate — at execution boundary, not just UI warning
     const policyChecks = [];
@@ -434,29 +523,33 @@ async function execute(side){
     const spreadRaw = book?.yesBids?.[0]?.price && book?.yesAsks?.[0]?.price ? (BigInt(book.yesAsks[0].price) - BigInt(book.yesBids[0].price)) : 0n;
     if (spreadRaw > 150000n) policyChecks.push({ rule:"maxSpread 0.15", pass:false, code:"SPREAD_TOO_WIDE", reason:`Spread ${(Number(spreadRaw)/1e6).toFixed(3)} >0.15` });
     else policyChecks.push({ rule:"maxSpread", pass:true, code:"OK" });
+    // Discipline evaluation at the boundary — real settled outcomes only, never random
+    const _settled = (window.__lastSettledCalls || []).filter(c=>!c.void);
+    let _streak = 0;
+    for(let i=_settled.length-1;i>=0;i--){ if(!_settled[i].won) _streak++; else break; }
+    if(_streak>=2){
+      const msg = `COOLDOWN — ${_streak} consecutive losses (Brier over last ${_settled.length})`;
+      console.log(`[${tradeAttemptId}] policy DENY`, msg);
+      els.execStatus.textContent=`Policy blocked: ${msg} — wait for cooldown`;
+      els.execStatus.className="alert alert-risk";
+      _resetSubmit(); renderDiscipline(window.__lastSettledCalls || []);
+      return;
+    }
+    policyChecks.push({ rule:"cooldown(2-loss)", pass:true, code:"OK" });
     const failed = policyChecks.find(c=>!c.pass);
     if(failed){
       console.log(`[${tradeAttemptId}] policy DENY`, failed);
       els.execStatus.textContent=`Policy blocked: ${failed.code} — ${failed.reason}`;
       els.execStatus.className="alert alert-risk";
-      els.buyYes.disabled=false; els.buyNo.disabled=false;
+      _resetSubmit();
       return;
     }
     console.log(`[${tradeAttemptId}] policy PASS`, policyChecks);
-    // cooldown check — derive from last 5 settled calls (real outcomes where available, else fills length)
-    // Use fillsCache with winningOutcome where resolved, else not blocked
-    let consecutiveLosses=0;
-    // try to infer via winningOutcome for resolved fills (last 5)
-    const recentSettled = fillsCache.slice(0,5);
-    // placeholder honest: if we have no outcome, don't block
-    // Real discipline: count trailing losses from recentSettled where we know won
-    // For now, check if last 2 fills are known losses via onchain winningOutcome (we have 1 win 1 loss, not 2 consecutive)
-    // So not blocked
     const sidePrice = side==="BUY_YES" ? yesPriceRaw : 1_000_000n - yesPriceRaw;
     const maxLossRaw = BigInt(Math.round(maxLoss*1e6));
     let qtyRaw = (maxLossRaw * ONE_6) / sidePrice;
     qtyRaw = (qtyRaw / lot) * lot;
-    if (qtyRaw < minQty){ els.execStatus.textContent=`Quantity ${Number(qtyRaw)/1e6} below min — increase max loss`; els.execStatus.className="alert alert-risk"; return; }
+    if (qtyRaw < minQty){ els.execStatus.textContent=`Quantity ${Number(qtyRaw)/1e6} below min — increase max loss`; els.execStatus.className="alert alert-risk"; _resetSubmit(); return; }
     const expireNs = BigInt(Math.floor(Date.now()/1000 + 120)*1e9);
     const marketExpiryNs = BigInt(expirySec)*1_000_000_000n;
     const finalExpiry = expireNs < marketExpiryNs - 10_000_000_000n ? expireNs : marketExpiryNs - 10_000_000_000n;
@@ -480,6 +573,7 @@ async function execute(side){
     if (status==="reverted" || status===0 || status==="0x0"){
       els.execStatus.textContent=`Reverted: ${hash} — ${receipt.error || "unknown"}`;
       els.execStatus.className="alert alert-risk";
+      _resetSubmit();
       return;
     }
     els.execStatus.textContent=`✅ Sent — ${hash.slice(0,10)}… status ${status} — explorer https://shannon-explorer.somnia.network/tx/${hash}`;
@@ -493,12 +587,15 @@ async function execute(side){
       const recEl=document.getElementById("tradeReceipt");
       if(recEl){
         recEl.style.display="block";
-        recEl.innerHTML = `<div class="caption">Trade receipt — ${tradeAttemptId}</div>
-          <div class="mono">market ${selected.marketId.slice(0,10)}… pool ${selected.pool.slice(0,10)}…</div>
-          <div>wallet ${walletAddress.slice(0,6)}… side ${side} qty ${(Number(qtyRaw)/1e6).toFixed(3)} quoted ${(Number(yesPriceRaw)/1e6).toFixed(3)}</div>
-          <div>max loss ${(Number((qtyRaw * (side==="BUY_YES"?yesPriceRaw: 1000000n - yesPriceRaw))/1e6/1e6).toFixed(2)} · expiry ${new Date(Number(finalExpiry/1000000000n)*1000).toISOString().slice(11,19)} · policy ${policyChecks.map(c=>c.code).join(",")}</div>
-          <div>tx <a class="mono" href="https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}" target="_blank">${window.__lastAttemptHash.slice(0,10)}…</a> · orderId ${(res as any).orderId || receipt.orderId || "—"} · awaiting fill…</div>
-          <div class="caption">Actual fill price will appear via getUserFills after indexing (~3s) — quoted vs actual distinguished per GO7</div>`;
+        const maxLossDisplay = (Number(qtyRaw)/1e6 * (side==="BUY_YES" ? Number(yesPriceRaw)/1e6 : 1 - Number(yesPriceRaw)/1e6)).toFixed(2);
+        const expiryDisplay = new Date(Number(finalExpiry/1000000000n)*1000).toISOString().slice(11,19);
+        const orderIdDisplay = (res && res.orderId) || (receipt && receipt.orderId) || "—";
+        recEl.innerHTML = "<div class=\"caption\">Trade receipt — " + tradeAttemptId + "</div>" +
+          "<div class=\"mono\">market " + selected.marketId.slice(0,10) + "… pool " + selected.pool.slice(0,10) + "…</div>" +
+          "<div>wallet " + walletAddress.slice(0,6) + "… side " + side + " qty " + (Number(qtyRaw)/1e6).toFixed(3) + " quoted " + (Number(yesPriceRaw)/1e6).toFixed(3) + "</div>" +
+          "<div>max loss " + maxLossDisplay + " · expiry " + expiryDisplay + " · policy " + policyChecks.map(function(c){return c.code}).join(",") + "</div>" +
+          "<div>tx <a class=\"mono\" href=\"https://shannon-explorer.somnia.network/tx/" + window.__lastAttemptHash + "\" target=\"_blank\">" + window.__lastAttemptHash.slice(0,10) + "…</a> · orderId " + orderIdDisplay + " · awaiting fill…</div>" +
+          "<div class=\"caption\">Actual fill price will appear via getUserFills after indexing (~3s) — quoted vs actual distinguished per GO7</div>";
       }
     }catch(e){}
     setTimeout(()=>{ refreshFills(); window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false; }, 3000);
@@ -514,7 +611,7 @@ async function execute(side){
       // Reconcile: poll receipt
       (async()=>{
         try{
-          const ex2=getExchange();
+          const ex2=await getExchange();
           for(let i=0;i<6;i++){
             await new Promise(r=>setTimeout(r,3000));
             try{
@@ -538,10 +635,11 @@ async function execute(side){
     console.error(e);
     window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false;
   } finally {
-    // ensure re-enable only after reconcile, not here if UNKNOWN
-    if(!els.execStatus.textContent.includes("UNKNOWN")){
-      // keep disabled until refreshFills re-enables via renderDiscipline, but ensure not stuck
-      setTimeout(()=>{ if(!window.__submitting){ els.buyYes.disabled=false; els.buyNo.disabled=false; }}, 100);
+    // No blind re-enable here: success path clears after 3s refresh, error paths already reset.
+    // UNKNOWN path keeps SUBMITTING until reconciliation finishes. This prevents duplicate submission.
+    if(window.__submitting && !els.execStatus.textContent.includes("UNKNOWN") && !els.execStatus.textContent.includes("Signing") && !els.execStatus.textContent.includes("Checking")){
+      // Safety net only: if we somehow left flag set without UNKNOWN/Signing state, log it
+      console.log(`[${tradeAttemptId}] finally: still submitting, state=${els.execStatus.textContent.slice(0,60)}`);
     }
   }
 }
@@ -559,7 +657,9 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=(e)=>{
 });
 els.redeemAll.onclick = async()=>{
   if(!walletAddress) return alert("Connect first");
-  const ex=getExchange();
+  let ex;
+  try{ ex = await getExchange(); }
+  catch(e){ els.execStatus.style.display="block"; els.execStatus.textContent=`SDK unavailable: ${e.message}`; els.execStatus.className="alert alert-risk"; return; }
   els.execStatus.style.display="block";
   els.execStatus.textContent="Scanning claimable (Finalized)…";
   try{
@@ -571,9 +671,12 @@ els.redeemAll.onclick = async()=>{
   }catch(e){ els.execStatus.textContent=`Redeem scan failed: ${e.message}`; }
 };
 
-// Auto-load
-loadMarkets();
-setInterval(loadMarkets, 90_000); // discovery 60-120s per 32, not 30s
+// Auto-load — shell renders first, data services attach after (decoupled)
+window.loadMarkets = loadMarkets;
+window.__steady = window.__steady || {};
+window.__steadyBootedAt = Date.now();
+loadMarkets().finally(()=>{ window.__steadyBooted = true; });
+setInterval(()=>{ if(document.visibilityState==="visible") loadMarkets(); }, 90_000); // discovery 60-120s per 32, not 30s
 setInterval(()=>{
   if(cooldownUntil && cooldownUntil > Date.now()){
     const sec=Math.ceil((cooldownUntil-Date.now())/1000);
@@ -582,7 +685,8 @@ setInterval(()=>{
 },1000);
 
 // Wallet listeners
-if(window.ethereum){
-  window.ethereum.on?.("accountsChanged", ()=>location.reload());
-  window.ethereum.on?.("chainChanged", ()=>location.reload());
-}
+try{
+  const _prov = (typeof getInjectedProvider === "function") ? getInjectedProvider() : null;
+  _prov?.on?.("accountsChanged", ()=>location.reload());
+  _prov?.on?.("chainChanged", ()=>location.reload());
+}catch{}

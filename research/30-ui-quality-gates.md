@@ -15,13 +15,17 @@
 
 ## Screens
 
-### A. Main trading/discovery — `app/index.html` Live section
+### A. Main trading/discovery — `app/terminal.html` Live section
 - Purpose: find a tradable window quickly
 - Primary action: select a market
 - Hierarchy: time left (mono) > asset/interval > spread/depth > book expand > select
 - Visual: table rows 48px, ink border, 8px radius, warm paper, amber at <2m
 - Responsive: desktop table, mobile collapsible rows
-- PASS: PASS — warm paper, table rows 48px, mono time left, ink border, amber <2m, mobile collapsible (code inspected, curl http://localhost:5173/ 200)
+- Browser evidence 2026-09-04 (Playwright chromium, real render `test-results/.../test-finished-1.png`):
+  - Shell renders instantly with explicit "Loading SDK…" + "Loading live markets…" (no blank, no infinite spinner without message)
+  - Loading state → after 12s timeout shows "Market data unavailable / Indexer timed out after 12s / Retry" + "App shell remains usable" (verified in passing test log 2026-09-04)
+  - paper rgb(252,250,247) verified via getComputedStyle, no purple gradient (hasPurple=false)
+  - Status: PARTIALLY COMPLETE — loading + error states browser-verified; live market rows depend on indexer availability (currently timing out from this env; node harness passed same day when reachable)
 
 ### B. Honest Ticket
 - Purpose: understand downside before signing
@@ -57,4 +61,10 @@
 
 ## Generic-AI slop rejection
 Any screen that looks like purple-gradient bento with 32px rounded cards, floating blobs, Inter everywhere, centered glass card, or “AI-powered” sparkles is **FAIL** — return to 29.
+Verified 2026-09-04 via real chromium render: warm paper rgb(252,250,247), Newsreader headline, JetBrains Mono data, 8px radius, 1px borders, ink primary button — no purple/glass/emoji. PASS.
+
+## Homepage vs dashboard (2026-09-04)
+- `/` → `app/index.html`: narrative homepage (thesis, problem, 4-step workflow, discipline, live proof hashes, CTA "Open the terminal"). Playwright "homepage renders" PASS 2026-09-04, bg rgb(252,250,247).
+- `/terminal.html` → operational dashboard (discovery, ticket, positions, score, settlement). Shell decoupled from data services; boot guard shows explicit init-failure state if esm.sh blocked.
+- Mobile 375px / tablet: responsive CSS present (768px breakpoint, stacked cards); screenshots deferred — CODE-EXISTS-BUT-UNVERIFIED for narrow viewports.
 

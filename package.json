@@ -20,5 +20,8 @@
     "@somnia-chain/markets-sdk": "^0.29.0",
     "dotenv": "^17.4.2",
     "viem": "^2.56.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }

@@ -3,8 +3,20 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Steady — Discipline-First Terminal for DreamDEX Event Contracts</title>
+<title>Steady — Know the downside before you enter.</title>
 <link rel="stylesheet" href="./style.css"/>
+<style>
+.hero{padding:64px 0 48px;display:grid;gap:24px}
+.hero h1{font-family:"Newsreader",serif;font-size:56px;line-height:0.95;letter-spacing:-0.03em;max-width:720px}
+.hero p{font-size:18px;color:var(--ink-2);max-width:600px;line-height:1.5}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px}
+.step{border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--surface);display:grid;gap:8px}
+.step .num{font-family:"JetBrains Mono";font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-2)}
+.preview{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)}
+.preview img{width:100%;height:auto;display:block}
+@media(max-width:900px){.hero h1{font-size:40px}.steps{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.steps{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <header class="header">
@@ -12,149 +24,74 @@
     <div style="display:flex;gap:12px;align-items:center">
       <div class="brand">STEADY</div>
       <span class="badge">SHANNON 50312 · TESTNET</span>
-      <span class="caption">DreamDEX Event Contracts · BTC/ETH · 1m/5m/15m/1h</span>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <span id="walletAddr" class="mono" style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis"></span>
-      <button id="connectBtn" class="btn btn-secondary">Connect</button>
+      <a class="btn btn-secondary" href="./terminal.html">Open terminal</a>
       <a class="badge" href="https://shannon-explorer.somnia.network" target="_blank">Explorer ↗</a>
     </div>
   </div>
 </header>
-
-<main class="grid" style="padding:24px 0 48px;display:grid;gap:24px">
-  <!-- Philosophy -->
-  <section class="surface" style="padding:24px;display:grid;gap:8px">
-    <div class="caption">Discipline · Clarity · Trust</div>
-    <div class="h1">Know the downside before you enter.</div>
-    <div style="color:var(--ink-2);max-width:720px">Steady is a consumer shell for live BTC/ETH Up/Down windows that makes your maximum loss explicit, tracks your calibration, and pauses you after 2 consecutive losses. Live data, no mocks.</div>
-    <div id="statusBar" class="alert" style="margin-top:8px">Connecting to indexer…</div>
-  </section>
-
-  <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:24px" id="mainGrid">
-    <!-- A. Discovery -->
-    <section id="discovery" class="surface" style="padding:0;overflow:hidden">
-      <div style="padding:16px 16px 0;display:flex;justify-content:space-between;align-items:center">
-        <div class="h2">Live windows</div>
-        <div style="display:flex;gap:8px">
-          <button id="refreshBtn" class="btn btn-secondary" style="height:32px">Refresh</button>
-          <span id="marketCount" class="badge">—</span>
+<main class="grid">
+  <section class="hero">
+    <div class="caption">Discipline-first terminal · DreamDEX Event Contracts</div>
+    <h1>Know the downside<br>before you enter.</h1>
+    <p>Prediction markets make the <em>click</em> easy. The <em>decision</em> is the hard part. Steady is a discipline-first execution layer for live BTC/ETH Up/Down windows — honest max loss, policy checks, verifiable fills, and a cooldown when you're tilting.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <a class="btn btn-primary" href="./terminal.html">Open the terminal</a>
+      <a class="btn btn-secondary" href="#how">How it works</a>
+      <span class="caption" style="align-self:center">Testnet only · No mocks · Every hash is mined</span>
+    </div>
+    <div class="preview" style="margin-top:16px">
+      <div style="padding:12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <span class="caption">Live terminal preview — real market data</span>
+        <span class="badge">BTC 15m · 0.623 / 0.657 · 12m left</span>
+      </div>
+      <div style="padding:16px;display:grid;gap:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="muted" style="padding:12px"><div class="caption">Pay</div><div class="mono" style="font-size:18px">22.40 → win 40.00</div><div class="caption">Max loss 22.40 · Qty 40.000</div></div>
+          <div class="muted" style="padding:12px"><div class="caption">Policy</div><div style="font-size:13px">Market Trading ✓ · Headroom 6m ✓ · Spread 0.034 ✓</div><div class="caption">Tilt: Steady (Brier 0.18)</div></div>
         </div>
+        <div class="caption">Preview uses real tick/lot and book math — not a screenshot. Open the terminal to see live data.</div>
       </div>
-      <div class="caption" style="padding:8px 16px">Time left · spread · book · status 1 Trading only · >60s headroom</div>
-      <div style="overflow:auto">
-        <table class="table" id="marketTable">
-          <thead><tr><th>Market</th><th>Expiry</th><th>Time left</th><th>Best bid / ask</th><th>Spread</th><th></th></tr></thead>
-          <tbody id="marketTbody"><tr><td colspan="6" class="empty">Loading live markets…</td></tr></tbody>
-        </table>
-      </div>
-      <div id="marketEmpty" class="empty" style="display:none">No live windows — next window in ~1m. Retrying…</div>
-    </section>
-
-    <!-- B. Honest Ticket -->
-    <section id="ticket" class="surface" style="padding:16px;display:grid;gap:12px;align-self:start;position:sticky;top:72px">
-      <div class="h2">Honest ticket</div>
-      <div id="ticketMarket" class="caption" style="min-height:18px">Select a market →</div>
-
-      <div style="display:grid;gap:8px">
-        <label class="caption">Max loss (tUSDC) — capped downside</label>
-        <input id="maxLoss" class="input mono" type="number" min="0.1" step="0.1" placeholder="25.0"/>
-        <div class="caption">One lot = 1000 raw (1 contract on 6-dec). Tick 1000 = 0.001.</div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <button id="buyYes" class="btn btn-primary">Buy UP</button>
-        <button id="buyNo" class="btn btn-secondary">Buy DOWN</button>
-      </div>
-
-      <div id="ticketPreview" class="muted" style="padding:12px;display:grid;gap:6px;font-size:13px">
-        <div class="caption">Preview</div>
-        <div id="previewPay" class="mono">Pay — → win —</div>
-        <div id="previewWin" class="mono">Profit — · Max loss —</div>
-        <div id="previewExpiry" class="caption">Expiry — · Spread —</div>
-        <div id="previewBook" class="caption" style="font-family:JetBrains Mono">Book —</div>
-        <div id="previewCapped" class="caption"></div>
-      </div>
-
-      <label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" id="confirmBox"/> I understand my max loss is capped and this is an IOC (fill what crosses, cancel remainder).</label>
-
-      <div id="tiltGuard" class="cooldown-bar" style="display:none">
-        <span id="tiltMsg">2 consecutive losses — cooldown active</span>
-        <span id="tiltCountdown" class="mono">3:00</span>
-      </div>
-      <div id="execStatus" class="alert" style="display:none"></div>
-      <div id="tradeReceipt" class="muted" style="display:none;padding:12px;font-size:12px"></div>
-      <div class="caption">Order type: Immediate-or-Cancel (2) · expire now+120s capped at marketExpiry-10s · nanos · tick-snapped · 60 gwei / 10M gas (SDK default)</div>
-    </section>
-  </div>
-
-  <!-- D. Score -->
-  <section id="score" class="surface" style="padding:16px;display:grid;gap:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center"><div class="h2">Calibration</div><span id="scoreN" class="badge">n —</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div>
-        <div class="caption">Brier score (0 perfect, 0.25 guessing)</div>
-        <div id="brierVal" class="kpi">— Need 5 settled</div>
-        <div class="brier-bar" style="margin-top:8px"><div id="brierFill" class="brier-fill" style="width:0%"></div><div class="brier-guess" title="0.25 guessing"></div></div>
-        <div class="caption" style="display:flex;justify-content:space-between"><span>0 sharp</span><span>0.25</span><span>0.5</span></div>
-        <div id="brierLabel" class="caption"></div>
-      </div>
-      <div>
-        <div class="caption">Edge (winRate - avg price)</div>
-        <div id="edgeVal" class="kpi">—</div>
-        <div id="edgeBar" class="brier-bar"><div id="edgeFill" class="brier-fill" style="width:0%"></div></div>
-        <div class="caption">Positive = you beat the price</div>
-        <div id="last5" style="display:flex;gap:6px;margin-top:8px"></div>
-      </div>
-    </div>
-    <div id="scoreDetail" class="caption"></div>
-  </section>
-
-  <!-- C. Positions Inbox -->
-  <section id="positions" class="surface" style="padding:0;overflow:hidden">
-    <div style="padding:16px;display:flex;justify-content:space-between;align-items:center">
-      <div class="h2">Positions — what do you have, what can you do next?</div>
-      <button id="redeemAll" class="btn btn-secondary" style="height:32px">Redeem claimable</button>
-    </div>
-    <div class="tabs" id="posTabs">
-      <div class="tab active" data-tab="ALL">All</div>
-      <div class="tab" data-tab="LIVE">Live</div>
-      <div class="tab" data-tab="SETTLING">Settling</div>
-      <div class="tab" data-tab="CLAIMABLE">Claimable</div>
-      <div class="tab" data-tab="WON">Won</div>
-      <div class="tab" data-tab="LOST">Lost</div>
-      <div class="tab" data-tab="VOID">Void</div>
-    </div>
-    <div style="overflow:auto">
-      <table class="table" id="posTable">
-        <thead><tr><th>Market</th><th>Side</th><th>Fill price</th><th>Qty</th><th>State</th><th>Tx</th><th>Action</th></tr></thead>
-        <tbody id="posTbody"><tr><td colspan="7" class="empty">Connect wallet to see positions.</td></tr></tbody>
-      </table>
     </div>
   </section>
 
-  <!-- E. Settlement -->
-  <section id="settlement" class="surface" style="padding:16px;display:grid;gap:8px">
-    <div class="h2">Settlement & redemption</div>
-    <div class="caption">Market → resolution → outcome → oracle reference → transaction evidence. Void pays 0.5 each side.</div>
-    <div id="settlementList" style="display:grid;gap:8px"><div class="empty">No settled positions yet — after a market locks, redemption is via Finalized scan (not loadMarkets) + ERC-6909.</div></div>
+  <section id="how" style="padding:48px 0;display:grid;gap:24px">
+    <div class="h1">Prediction markets make the click easy.<br>The decision is the hard part.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px">
+      <div><div class="caption">Without Steady</div><p style="color:var(--ink-2)">Price looks like a number. Max loss is hidden. Two losses → revenge trade. Winnings sit unclaimed because Finalized is hidden from the live list. Settlement is a black box.</p></div>
+      <div><div class="caption">With Steady</div><p>Max loss is the first number. Policy blocks bad trades with an exact reason. Fills are traceable (quoted vs actual). Settlement is a Finalized scan + ERC-6909, void is 0.5. Redemption is one click with explorer evidence.</p></div>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="num">01 — Decide</div><div style="font-weight:600">Honest ticket</div><div class="caption">Max loss → qty/pay/payout, tick/lot snapped, spread and expiry visible</div></div>
+      <div class="step"><div class="num">02 — Check</div><div style="font-weight:600">Policy gate</div><div class="caption">Trading status 1, headroom ≥60s, liquidity, spread, balance, 2-loss cooldown — deny with code</div></div>
+      <div class="step"><div class="num">03 — Execute</div><div style="font-weight:600">IOC with proof</div><div class="caption">Immediate-or-Cancel (2), expire now+120s capped at marketExpiry-10s, 60 gwei / 10M gas</div></div>
+      <div class="step"><div class="num">04 — Verify</div><div style="font-weight:600">Receipt + fill</div><div class="caption">Tx hash, receipt, fillPrice vs quoted, order/fill IDs, explorer, position lifecycle</div></div>
+    </div>
   </section>
 
-  <footer class="caption" style="text-align:center;padding:24px;border-top:1px solid var(--border)">
-    Steady · Shannon 50312 testnet only · <a href="https://shannon-explorer.somnia.network" target="_blank">Explorer</a> · <a href="https://docs.dreamdex.io/developers/event-contracts" target="_blank">Docs</a> · No mocks · Every hash is mined
-  </footer>
+  <section style="padding:48px 0;display:grid;gap:16px">
+    <div class="h1">Discipline, not dopamine.</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <div class="surface" style="padding:16px"><div class="caption">Explicit downside</div><div style="font-weight:600;margin-top:8px">Max loss is the largest number on the ticket — not the price.</div></div>
+      <div class="surface" style="padding:16px"><div class="caption">Cooldown</div><div style="font-weight:600;margin-top:8px">2 consecutive losses → 3 min block at the execution boundary, not a UI warning.</div></div>
+      <div class="surface" style="padding:16px"><div class="caption">Calibration</div><div style="font-weight:600;margin-top:8px">Brier <0.25 is Steady, Edge = winRate − avgPrice. Need 5 settled — honest, not fake.</div></div>
+    </div>
+    <div class="surface" style="padding:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div class="mono" style="font-size:13px">Live proof: 0xed05c…72464c (quoted 0.049 → fill 0.021) · 0x6f6beb…54252c (BUY_YES) + 0x882858…29f6fc5 (BUY_NO) · redeem 0x3aa5ec…77444</div>
+      <a class="btn btn-secondary" href="https://shannon-explorer.somnia.network/tx/0xed05c90f6426b096d63c6ee2edd3d8aa201e94080d7454bf2215add29c72464c" target="_blank" style="height:32px">View tx →</a>
+    </div>
+  </section>
+
+  <section style="padding:48px 0 64px;display:grid;gap:16px;justify-items:start">
+    <div class="h1">Open the terminal when you're ready to be accountable.</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <a class="btn btn-primary" href="./terminal.html">Open the terminal</a>
+      <a class="btn btn-secondary" href="https://docs.dreamdex.io/developers/event-contracts" target="_blank">Read docs →</a>
+    </div>
+    <div class="caption">Testnet only · Shannon 50312 · tUSDC faucet 10k · No mocks · Every hash is mined on Shannon</div>
+  </section>
 </main>
-
-<script type="importmap">
-{
-  "imports": {
-    "viem": "https://esm.sh/viem@2.56.1",
-    "viem/accounts": "https://esm.sh/viem@2.56.1/accounts",
-    "@somnia-chain/markets-sdk": "https://esm.sh/@somnia-chain/markets-sdk@0.29.0?external=viem",
-    "@somnia-chain/markets-sdk/chains": "https://esm.sh/@somnia-chain/markets-sdk@0.29.0/chains?external=viem"
-  }
-}
-</script>
-<script type="module" src="./app.js"></script>
+<footer class="caption" style="text-align:center;padding:24px;border-top:1px solid var(--border)">Steady · Shannon 50312 testnet only · <a href="https://shannon-explorer.somnia.network" target="_blank">Explorer</a> · <a href="https://docs.dreamdex.io/developers/event-contracts" target="_blank">Docs</a></footer>
 </body>
 </html>

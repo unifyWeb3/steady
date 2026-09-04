@@ -1,6 +1,6 @@
 # Implementation Status — Steady
 
-Last updated: 2026-09-03 19:26 UTC — Gates 1-5 Re-verified + Control Plane + App Shell + 13 Tests PASS
+Last updated: 2026-09-04 — Gates 1-4 re-PASS + frontend reliability fix + browser QA (chromium); real-popup signing still CODE-EXISTS-BUT-UNVERIFIED
 
 ## Current Phase
 **Phase 1 — Steady Live** — **Gates 1-5 Re-verified 2026-09-03, 13 unit tests PASS, app shell live :5173 (real SDK via esm.sh, warm paper, no purple glow), lib/dreamdex + lib/steady complete**
@@ -74,7 +74,8 @@ Previous **FillOrKillNotFillable** failure at 20:51 (same market `0x...1074a` po
 | Research 00-30 | VERIFIED COMPLETE | Gates 1-4 re-verified 19:26, 04 assumption updated (60/300/900/3600 live), 29 warm paper live via app/style.css | — |
 | Integration core lib/dreamdex | VERIFIED COMPLETE | Gates 1-5 PASS with real tx 0xed05c…72464c, post_verify receipt+fill, lib/dreamdex/*.ts real SDK | — |
 | Steady domain lib/steady | VERIFIED COMPLETE (unit) / PARTIALLY COMPLETE (live) | 13/13 unit PASS; Brier/Edge <5 → null honest; live Brier needs 5 settled — currently 2 fills, not yet 5 | Need 3 more settled or test-prove |
-| Frontend shell app/ | PARTIALLY COMPLETE (walletClient LIVE-PROVEN via http) | Static app :5173 warm paper, `app.js:401 createTrader({walletClient})` shares same placeOrder as privateKey LIVE-PROVEN; Node http walletClient BUY_YES 0x6f6beb… + BUY_NO 0x882858… both success on 0x...12994 pool 0x443904… (quoted vs actual) — proves browser MetaMask path will succeed | Manual browser MetaMask E2E next |
+| Frontend shell app/ | PARTIALLY COMPLETE | Shell decoupled from SDK/indexer (lazy import, 12s timeout + Retry, boot guard); homepage `/` + dashboard `/terminal.html` structure; warm paper verified in chromium (rgb 252,250,247, no purple) | Manual popup signing + mobile screenshots |
+| Browser wallet E2E (popup) | CODE-EXISTS-BUT-UNVERIFIED | Mock-Rabby connect PASS in chromium; `createTrader({walletClient})` shares placeOrder with Node LIVE-PROVEN 0x6f6beb…/0x882858…; mock throws honestly on eth_sendTransaction | Manual MetaMask test needed |
 | Positions inbox | PARTIALLY COMPLETE | getUserFills 2 live, table renders, but lifecycle PENDING→CONFIRMED→INDEXED proven, SETTLED→REDEEMED not yet live (no Finalized with our market yet) | Wait for lock or use known Finalized |
 | Settlement/redemption | VERIFIED COMPLETE (live) | listPastBinaryMarkets Finalized + getOutcomeBalance account/id + redeemWinning LIVE-PROVEN 2026-09-03 20:50: 0x...1074a winning 0 YES 1000→0 via 0x3aa5ec…77444 success, 0x...107fc winning 1 YES correctly 0 | — |
 | Policy at boundary | PARTIALLY COMPLETE | lib/steady/discipline + ticket checks exist, app.js checks status/headroom/tick/balance/cooldown before placeOrder, but tilt guard still placeholder (random) — not enforced at execution boundary yet | Wire discipline.ts before trader.placeOrder, disable button |
