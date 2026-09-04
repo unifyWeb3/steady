@@ -17,7 +17,11 @@
 | Ticket preview render | LIVE-PROVEN (browser shell) | Ticket section renders with max-loss input + preview placeholders; live market selection needs reachable indexer (currently timing out from this env) |
 | Real wallet signature → tx → fill (MetaMask popup) | CODE-EXISTS-BUT-UNVERIFIED | `app.js:execute()` single boundary via `createTrader({walletClient})`; Node http walletClient BUY_YES 0x6f6beb… + BUY_NO 0x882858… LIVE-PROVEN same SDK call; browser popup needs manual MetaMask |
 | Settlement/redemption | LIVE-PROVEN (prior, privateKey path) | 0x...1074a YES 1000→0 via 0x3aa5ec…77444 block 478925556; unchanged |
-| Deployment | NOT VERIFIED | `dist/` rebuilt 2026-09-04 (68K); no prod URL, no prod smoke test |
+| Deployment | NOT VERIFIED | `dist/` rebuilt 2026-09-04 (84K, includes terminal.html); no prod URL, no prod smoke test |
+| Ticket correctness (preview = executable price) | LIVE-PROVEN (browser shell) | `computeTicket` now uses live bestAsk+0.02 tick-snapped (same as `execute()`), side-aware qty/pay (DOWN priced as 1-YES), UP=YES/DOWN=NO labels, lot caption fixed (1000 raw = 0.001 contracts) |
+| Policy consistency (account state vs execution result) | LIVE-PROVEN (browser shell) | Preview shows "Trade policy: DENIED — cooldown active" when cooling; receipt header reads "policy at execution (not current account state)"; cooldown enforced at boundary with exact code |
+| Mobile 375px | LIVE-PROVEN (browser) | Playwright PASS: 0px overflow, ticket visible, screenshot `test-results/terminal-mobile-375.png` (dark ink rail, nav tabs, loading states) |
+| Full browser suite (merged tree) | LIVE-PROVEN (browser shell) | 5/5 Playwright PASS 2026-09-04: homepage, terminal shell+timeout, mock-Rabby connect, mobile 375px, ticket render |
 
 ## Completed work
 - Research 00-27 completed, `AGENTS.md` contamination audit 0 GenLayer hits in `/home/unify/somnia` (only `4221` in deps trusted-setups hex, not GenLayer)

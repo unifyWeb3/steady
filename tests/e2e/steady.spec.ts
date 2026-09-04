@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
 
+async function safeShot(page: any, path: string) {
+  try { await page.screenshot({ path, timeout: 10000 }); } catch (e) { console.log("screenshot skipped", path, String(e).slice(0, 120)); }
+}
+
 const TEST_PRIVATE_KEY = process.env.TEST_WALLET_PRIVATE_KEY || "";
 const TEST_ADDRESS = "0x0d6FAee78dFF4380E77D0e412F5Cddd942673719";
 
@@ -44,7 +48,7 @@ test.describe("Steady", () => {
     page.on("pageerror", e => console.log("[homepage] pageerror", String(e).slice(0,300)));
     await page.goto("http://localhost:5173/", { waitUntil: "domcontentloaded" });
     await expect(page.locator("text=Know the downside")).toBeVisible({ timeout: 15000 });
-    await page.screenshot({ path: "test-results/homepage-desktop.png", fullPage: true });
+    await safeShot(page, "test-results/homepage-desktop.png");
     // Check no purple gradient
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     console.log("bg", bg);
@@ -65,7 +69,7 @@ test.describe("Steady", () => {
     await page.waitForTimeout(8000);
     const after = await tbody.innerHTML();
     console.log("after 13s", after.slice(0,500));
-    await page.screenshot({ path: "test-results/terminal-desktop.png", fullPage: true });
+    await safeShot(page, "test-results/terminal-desktop.png");
     // Check warm paper
     const paper = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     console.log("paper", paper);
@@ -87,7 +91,18 @@ test.describe("Steady", () => {
     const status = page.locator("#statusBar");
     // SDK load (~10s esm.sh) + RPC balance read; allow 25s. Honest states only.
     await expect(status).toContainText(/Connected|Connect failed/, { timeout: 25000 });
-    await page.screenshot({ path: "test-results/terminal-connected.png", fullPage: true });
+    await safeShot(page, "test-results/terminal-connected.png");
+  });
+
+  test("mobile 375px has no horizontal overflow", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("http://localhost:5173/terminal.html", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(4000);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    console.log("375px overflow px:", overflow);
+    expect(overflow).toBeLessThanOrEqual(1);
+    await expect(page.locator("#ticketMarket")).toBeVisible();
+    await safeShot(page, "test-results/terminal-mobile-375.png");
   });
 
   test("ticket shows max loss as largest number", async ({ page }) => {
@@ -102,10 +117,13 @@ test.describe("Steady", () => {
       await page.waitForTimeout(2000);
       await page.locator("#maxLoss").fill("25");
       await page.waitForTimeout(1000);
+      const risk = await page.locator("#riskNum").textContent();
+      console.log("riskNum", risk);
+      await expect(page.locator("#riskNum")).toContainText("tUSDC");
       const pay = await page.locator("#previewPay").textContent();
       console.log("previewPay", pay);
-      await expect(page.locator("#previewPay")).toContainText("Pay");
-      await page.screenshot({ path: "test-results/ticket.png", fullPage: true });
+      await expect(page.locator("#buyYes")).toContainText("Buy UP");
+      await safeShot(page, "test-results/ticket.png");
     } else {
       console.log("no market to select");
     }

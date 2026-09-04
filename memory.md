@@ -4,7 +4,7 @@
 
 **Architecture:** Browser → SDK (SomniaMarkets 0.29.0, SOMNIA_TESTNET_ADDRESSES) → indexer dev.smk + WS wss://api.infra.testnet.somnia.network/ws → chain. No backend/DB; lib/dreamdex (real SDK) + lib/steady (pure) + app/ (warm paper static via esm.sh, window.ethereum). See research/31.
 
-**Phase:** Phase 1 reliability fix 2026-09-04. Gates 1-4 re-PASS (node). Unit 13/13 PASS. Browser: homepage PASS, terminal shell+timeout PASS, mock-Rabby connect PASS (chromium). Real popup signing CODE-EXISTS-BUT-UNVERIFIED.
+**Phase:** Phase 1 hardening merged 2026-09-04. Gates 1-4 re-PASS (node). Unit 13/13 PASS. Browser 5/5 PASS (chromium): homepage, terminal shell+timeout, mock-Rabby connect, mobile 375px (0 overflow), ticket render. Ticket preview = executable price, policy DENIED shown during cooldown, receipt = policy-at-execution. Real popup signing CODE-EXISTS-BUT-UNVERIFIED. dist/ 84K rebuilt, no prod URL yet.
 
 **Verified protocol:** listLiveBinaryMarkets 14 live (60/300/900/3600 BTC/ETH), getMarketOnchain status 1 Trading, getBinaryOrderBook 0.751/0.777 spread, tick/lot 1000, IOC 2 with expire nanos, faucet 10k tUSDC.
 

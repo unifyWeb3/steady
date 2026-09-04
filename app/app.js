@@ -57,6 +57,9 @@ const els = {
   scoreDetail: document.getElementById("scoreDetail"),
   redeemAll: document.getElementById("redeemAll"),
   settlementList: document.getElementById("settlementList"),
+  riskNum: document.getElementById("riskNum"),
+  riskSub: document.getElementById("riskSub"),
+  previewCappedRow: document.getElementById("previewCappedRow"),
 };
 
 let exchange = null;
@@ -83,13 +86,22 @@ async function getExchange() {
 }
 function getSdkAddrs(){ return _sdk ? _sdk.SOMNIA_TESTNET_ADDRESSES : null; }
 
-function fmtExpiry(expirySec) {
+function fmtCountdown(expirySec) {
   const now = Math.floor(Date.now()/1000);
   const left = expirySec - now;
-  if (left <= 0) return "locked";
+  if (left <= 0) return { text: "locked", cls: "countdown-low" };
   const m = Math.floor(left/60), s = left%60;
-  return `${m}m ${String(s).padStart(2,"0")}s`;
+  const text = `${m}m ${String(s).padStart(2,"0")}s`;
+  if (left < 60) return { text: `locks in ${s}s`, cls: "countdown-low" };
+  if (left < 120) return { text, cls: "countdown-warn" };
+  return { text, cls: "" };
 }
+function fmtExpiry(expirySec) { return fmtCountdown(expirySec).text; }
+function stateBadge(state){
+  const map = { LIVE:"badge badge-live", SETTLING:"badge", CLAIMABLE:"badge badge-solid", WON:"badge badge-up", LOST:"badge badge-down", VOID:"badge badge-void", REDEEMED:"badge badge-quiet", LOCKED:"badge", PENDING:"badge badge-unknown", UNKNOWN:"badge badge-unknown", STALE:"badge badge-stale" };
+  return map[state] || "badge";
+}
+function shortHash(h){ return h && h.length>12 ? h.slice(0,8)+"…"+h.slice(-4) : (h||"—"); }
 function toProb(raw) { return Number(raw)/Number(ONE_6); }
 function tickSnap(priceRaw, tick){ return (priceRaw / tick) * tick; }
 
@@ -176,17 +188,20 @@ async function loadMarkets(){
         if (bestAsk) askTxt = (Number(bestAsk)/1e6).toFixed(3);
         if (b.yesBids?.length && b.yesAsks?.length) spreadTxt = ((Number(bestAsk)-Number(bestBid))/1e6).toFixed(3);
       }catch{}
+      const cd = fmtCountdown(m.expirySec);
+      const label = m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h";
       const tr = document.createElement("tr");
       tr.className="row";
+      tr.dataset.marketId = m.marketId;
       tr.style.cursor="pointer";
       tr.innerHTML = `
-        <td><span class="mono">${m.asset}</span> <span class="caption">${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h"}</span><br><span class="caption mono">${m.marketId.slice(0,10)}…</span></td>
-        <td class="mono">${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC</td>
-        <td class="mono">${fmtExpiry(m.expirySec)}</td>
-        <td class="mono">${bidTxt} / ${askTxt}</td>
-        <td class="mono">${spreadTxt}</td>
-        <td><button class="btn btn-secondary" style="height:32px">Select</button></td>`;
-      tr.querySelector("button").onclick = () => selectMarket(m);
+        <td data-l="Market"><span class="mono rowmain">${m.asset}</span> <span class="caption">${label}</span><br><span class="caption mono">${m.marketId.slice(0,10)}…</span></td>
+        <td data-l="Expiry" class="mono">${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC</td>
+        <td data-l="Time left" class="mono ${cd.cls}">${cd.text}</td>
+        <td data-l="Best bid / ask" class="mono num">${bidTxt} / ${askTxt}</td>
+        <td data-l="Spread" class="mono num">${spreadTxt}</td>
+        <td data-l="Select"><button class="btn btn-secondary btn-sm">Select</button></td>`;
+      tr.querySelector("button").onclick = (e) => { e.stopPropagation(); selectMarket(m); };
       tr.onclick = () => selectMarket(m);
       els.marketTbody.appendChild(tr);
     }
@@ -212,8 +227,11 @@ async function loadMarkets(){
 
 async function selectMarket(m){
   selected = m;
-  els.ticketMarket.textContent = `${m.asset} ${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h"} · expiry ${new Date(m.expirySec*1000).toISOString().slice(11,16)} · ${m.marketId.slice(0,10)}… · pool ${m.pool.slice(0,10)}…`;
+  els.ticketMarket.textContent = `${m.asset} ${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h"} · expiry ${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC · ${m.marketId.slice(0,10)}… · pool ${m.pool.slice(0,10)}…`;
   els.ticketMarket.title = m.marketId;
+  document.querySelectorAll("#marketTbody tr.row").forEach(tr=>{
+    tr.classList.toggle("selected", tr.dataset.marketId === m.marketId);
+  });
   // fetch book + params
   try{
     const ex = await getExchange();
@@ -230,43 +248,76 @@ async function selectMarket(m){
 
 function computeTicket(maxLossHuman, side){
   if(!selected || !bookParams) return { error:"Select market first" };
-  const priceProb = side==="BUY_YES" ? 0.55 : 0.45; // preview price; real execution uses bestAsk+0.02
-  // But honest ticket should show true max loss vs pay: we compute qty from maxLoss/price
   const tick = BigInt(bookParams.tickSize);
   const lot = BigInt(bookParams.lotSize);
   const minQty = BigInt(bookParams.minQuantity);
+  // Preview uses the SAME executable price as execute(): live bestAsk +0.02 cross, tick-snapped.
+  // BUY_NO is priced in YES terms (DOWN prob = 1 - YES), matching SDK semantics.
+  const _bestAskRaw = book?.yesAsks?.[0]?.price ? BigInt(book.yesAsks[0].price) : 500_000n;
+  let _yesPrice = (side==="BUY_YES") ? (_bestAskRaw + 20000n) : (1_000_000n - (_bestAskRaw + 20000n));
+  if(_yesPrice>=1_000_000n) _yesPrice = 999000n;
+  if(_yesPrice<=0n) _yesPrice = 1000n;
+  const snapped = (_yesPrice / tick) * tick;
+  const sidePrice = (side==="BUY_YES") ? snapped : (1_000_000n - snapped);
   // real available balance if connected, else fallback 10k for preview
   const availableRaw = (window.__tUSDCBalance !== undefined ? window.__tUSDCBalance : 10_000_000n * 1000n);
-  // mimic lib/steady/ticket.ts
-  const priceRaw = BigInt(Math.round(priceProb*1e6));
-  const snapped = (priceRaw / tick) * tick;
   const maxLossRaw = BigInt(Math.round(maxLossHuman*1e6));
-  let qtyFromLoss = (maxLossRaw * ONE_6) / snapped;
+  let qtyFromLoss = (maxLossRaw * ONE_6) / sidePrice;
   let qtyRaw = (qtyFromLoss / lot) * lot;
-  if (qtyRaw < minQty) return { error: `Quantity ${Number(qtyRaw)/1e6} below min ${Number(minQty)/1e6} — increase max loss` };
+  if (qtyRaw < minQty) return { error: `Quantity ${(Number(qtyRaw)/1e6).toFixed(3)} below min ${(Number(minQty)/1e6).toFixed(3)} — increase max loss` };
   if (qtyRaw===0n) return { error:"Quantity 0 after lot snap — increase max loss" };
-  const payRaw = (qtyRaw * snapped) / ONE_6;
+  const payRaw = (qtyRaw * sidePrice) / ONE_6;
   const payoutRaw = qtyRaw;
   const profitRaw = payoutRaw - payRaw;
   // spread
   const bestBid = book?.yesBids?.[0]?.price ? Number(book.yesBids[0].price)/1e6 : null;
   const bestAsk = book?.yesAsks?.[0]?.price ? Number(book.yesAsks[0].price)/1e6 : null;
   const spread = bestBid!==null && bestAsk!==null ? bestAsk-bestBid : null;
-  return { payRaw, payoutRaw, profitRaw, qtyRaw, priceRaw: snapped, priceProb: Number(snapped)/1e6, spread, bookDepth: book?.yesAsks?.[0]?.quantity ? BigInt(book.yesAsks[0].quantity) : undefined };
+  // priceProb is the SIDE probability the user buys (UP=YES, DOWN=1-YES); priceRaw stays YES terms for SDK
+  const sideProb = Number(sidePrice)/1e6;
+  return { payRaw, payoutRaw, profitRaw, qtyRaw, priceRaw: snapped, priceProb: sideProb, sidePrice, spread, bookDepth: book?.yesAsks?.[0]?.quantity ? BigInt(book.yesAsks[0].quantity) : undefined };
 }
 
 function updatePreview(){
   const v = Number(els.maxLoss.value);
-  if (!v || !selected) { els.previewPay.textContent="Pay — → win —"; els.previewWin.textContent="Profit — · Max loss —"; return; }
-  // show both sides preview for current maxLoss
+  if (!v || !selected) {
+    els.previewPay.textContent="—"; els.previewWin.textContent="—";
+    els.previewExpiry.textContent="—"; els.previewBook.textContent="—";
+    if(els.riskNum) els.riskNum.textContent="—";
+    if(els.riskSub) els.riskSub.textContent = selected ? "Enter max loss" : "Enter max loss + pick a window";
+    els.buyYes.textContent="Buy UP"; els.buyNo.textContent="Buy DOWN";
+    return;
+  }
+  // show both sides preview for current maxLoss; labels map UP=YES outcome, DOWN=NO outcome
   const yes = computeTicket(v, "BUY_YES");
   const no = computeTicket(v, "BUY_NO");
-  if (yes.error) { els.previewPay.textContent=yes.error; return; }
-  els.previewPay.textContent = `Pay ${(Number(yes.payRaw)/1e6).toFixed(2)} → win ${(Number(yes.payoutRaw)/1e6).toFixed(2)} if chosen (UP price ${(yes.priceProb).toFixed(3)})`;
-  els.previewWin.textContent = `Profit +${(Number(yes.profitRaw)/1e6).toFixed(2)} · Max loss ${(Number(yes.payRaw)/1e6).toFixed(2)} · Qty ${(Number(yes.qtyRaw)/1e6).toFixed(3)} contracts`;
-  els.previewExpiry.textContent = `Expiry ${fmtExpiry(selected.expirySec)} · Spread ${yes.spread!==null?yes.spread.toFixed(3):"—"}`;
-  els.previewBook.textContent = `Book yesBid ${book?.yesBids?.[0]? (Number(book.yesBids[0].price)/1e6).toFixed(3):"—"} / yesAsk ${book?.yesAsks?.[0]? (Number(book.yesAsks[0].price)/1e6).toFixed(3):"—"} · tick ${bookParams?.tickSize} lot ${bookParams?.lotSize}`;
-  els.previewCapped.textContent = "";
+  if (yes.error) {
+    els.previewPay.textContent=yes.error;
+    if(els.riskNum) els.riskNum.textContent="—";
+    if(els.riskSub) els.riskSub.textContent=yes.error;
+    return;
+  }
+  const payH = (Number(yes.payRaw)/1e6).toFixed(2);
+  const winH = (Number(yes.payoutRaw)/1e6).toFixed(2);
+  const profitH = (Number(yes.profitRaw)/1e6).toFixed(2);
+  const qtyH = (Number(yes.qtyRaw)/1e6).toFixed(3);
+  if(els.riskNum) els.riskNum.textContent = `${payH} tUSDC`;
+  if(els.riskSub) els.riskSub.textContent = `Capped downside · ${qtyH} contracts · IOC`;
+  els.previewPay.textContent = `${payH} → ${winH} if UP @ ${(yes.priceProb).toFixed(3)}`;
+  els.previewWin.textContent = `+${profitH} · ${qtyH} contracts`;
+  els.previewExpiry.textContent = `${fmtExpiry(selected.expirySec)} · ${yes.spread!==null?yes.spread.toFixed(3):"—"}`;
+  els.previewBook.textContent = `${book?.yesBids?.[0]? (Number(book.yesBids[0].price)/1e6).toFixed(3):"—"} / ${book?.yesAsks?.[0]? (Number(book.yesAsks[0].price)/1e6).toFixed(3):"—"} · t${bookParams?.tickSize} l${bookParams?.lotSize}`;
+  els.buyYes.textContent = `Buy UP — ${payH}`;
+  els.buyNo.textContent = `Buy DOWN — ${payH}`;
+  // Policy consistency: current account state vs this execution's policy result must never contradict
+  if (cooldownUntil && cooldownUntil > Date.now()){
+    const secs = Math.ceil((cooldownUntil-Date.now())/1000);
+    els.previewCapped.textContent = `Trade policy: DENIED — cooldown active (${secs}s remaining). Current account state: COOLDOWN.`;
+    if (els.previewCappedRow) els.previewCappedRow.style.display = "flex";
+  } else {
+    els.previewCapped.textContent = "Trade policy for this ticket: PASS (market Trading, headroom, spread, size checked at execution).";
+    if (els.previewCappedRow) els.previewCappedRow.style.display = "flex";
+  }
 }
 
 // Wallet — Rabby/MetaMask compatible, handles providers array
@@ -351,14 +402,17 @@ function renderPositions(){
   tbody.innerHTML="";
   for(const f of rows.slice(0,20)){
     const tr=document.createElement("tr");
+    const side = f.takerSide||f.side||"—";
+    const sideCls = side.includes("YES") ? "badge badge-up" : side.includes("NO") ? "badge badge-down" : "badge badge-quiet";
+    const tx = f.txHash || "";
     tr.innerHTML=`
-      <td class="mono">${(f.market||"").slice(0,10)}…<br><span class="caption">${f.pool?.slice(0,10)}…</span></td>
-      <td>${f.takerSide||f.side||"—"}</td>
-      <td class="mono">${f.fillPrice? (Number(f.fillPrice)/1e6).toFixed(3): "—"}</td>
-      <td class="mono">${f.quantity? (Number(f.quantity)/1000).toFixed(3): "—"}</td>
-      <td><span class="badge">${f._state}</span></td>
-      <td class="mono" style="max-width:120px;overflow:hidden;text-overflow:ellipsis"><a href="https://shannon-explorer.somnia.network/tx/${f.txHash}" target="_blank">${(f.txHash||"").slice(0,8)}…</a></td>
-      <td><span class="caption">${f._expiry? fmtExpiry(f._expiry): "—"}</span></td>`;
+      <td data-l="Market" class="mono"><span class="rowmain">${(f.market||"").slice(0,10)}…</span><br><span class="caption">${(f.pool||"").slice(0,10)}…</span></td>
+      <td data-l="Side"><span class="${sideCls}">${side.replace("BUY_","")}</span></td>
+      <td data-l="Fill price" class="mono num">${f.fillPrice? (Number(f.fillPrice)/1e6).toFixed(3): "—"}</td>
+      <td data-l="Qty" class="mono num">${f.quantity? (Number(f.quantity)/1000).toFixed(3): "—"}</td>
+      <td data-l="State"><span class="${stateBadge(f._state)}">${f._state==="LIVE"?"● LIVE":f._state}</span></td>
+      <td data-l="Tx" class="mono" style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${tx?`<a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${tx}" target="_blank" rel="noopener">${shortHash(tx)} ↗</a>`:"—"}</td>
+      <td data-l="Action"><span class="caption">${f._expiry? fmtExpiry(f._expiry): "—"}</span></td>`;
     tbody.appendChild(tr);
   }
 }
@@ -414,7 +468,7 @@ function renderScore(){
       els.brierLabel.textContent = brier<0.25?"Steady": brier<0.33?"Drifting":"Tilting";
       els.scoreN.textContent = `n ${settled.length}`;
       els.edgeFill.style.width = `${50+edge*100}%`;
-      els.last5.innerHTML = settled.slice(-5).map(c=>`<span class="badge" style="background:${c.won?"#0A7A5A":"#9E2B25"};color:#fff">${c.won?"W":"L"}</span>`).join("");
+      els.last5.innerHTML = settled.slice(-5).map(c=>`<span class="wl-dot ${c.won?"wl-w":"wl-l"}" title="${c.won?"Won":"Lost"}">${c.won?"W":"L"}</span>`).join("");
       window.__lastSettledCalls = settled;
       renderDiscipline(settled);
     } else if(calls.length>0){
@@ -437,6 +491,7 @@ function renderDiscipline(calls){
     cooldownUntil = Date.now() + 3*60*1000;
     try{ localStorage.setItem("steady:cooldownUntil", String(cooldownUntil)); }catch{}
   }
+  window.__cooldownStreak = streak;
   // Restore cooldown from storage on load
   if(!cooldownUntil){
     try{
@@ -445,10 +500,10 @@ function renderDiscipline(calls){
     }catch{}
   }
   if (cooldownUntil && cooldownUntil > Date.now()){
-    els.tiltGuard.style.display="flex";
-    els.tiltMsg.textContent = `${streak} consecutive losses — 3 min cooldown`;
+    els.tiltGuard.style.display="grid";
     const sec = Math.ceil((cooldownUntil - Date.now())/1000);
     els.tiltCountdown.textContent = `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
+    els.tiltMsg.textContent = `${streak} consecutive losses. Trading resumes in ${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}.`;
     els.buyYes.disabled = true;
     els.buyNo.disabled = true;
     els.buyYes.title = `Blocked: ${streak} losses — wait ${sec}s`;
@@ -576,13 +631,12 @@ async function execute(side){
       _resetSubmit();
       return;
     }
-    els.execStatus.textContent=`✅ Sent — ${hash.slice(0,10)}… status ${status} — explorer https://shannon-explorer.somnia.network/tx/${hash}`;
+    els.execStatus.innerHTML = `<span class="code">CONFIRMED · ${status}</span> Sent — <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${hash}" target="_blank" rel="noopener">${shortHash(hash)} ↗</a>`;
     els.execStatus.className="alert alert-success";
-    els.execStatus.innerHTML += ` <a href="https://shannon-explorer.somnia.network/tx/${hash}" target="_blank">View →</a>`;
     // refresh
     window.__lastAttemptHash = receipt.transactionHash || res.transactionHash || "";
     console.log(`[${tradeAttemptId}] CONFIRMED hash ${window.__lastAttemptHash} quoted ${(Number(yesPriceRaw)/1e6).toFixed(3)} vs actual will be verified via fill`);
-    // Accounting receipt (quoted vs actual distinguish)
+    // Trade receipt — progressive disclosure: default completed, View proof expands
     try{
       const recEl=document.getElementById("tradeReceipt");
       if(recEl){
@@ -590,12 +644,20 @@ async function execute(side){
         const maxLossDisplay = (Number(qtyRaw)/1e6 * (side==="BUY_YES" ? Number(yesPriceRaw)/1e6 : 1 - Number(yesPriceRaw)/1e6)).toFixed(2);
         const expiryDisplay = new Date(Number(finalExpiry/1000000000n)*1000).toISOString().slice(11,19);
         const orderIdDisplay = (res && res.orderId) || (receipt && receipt.orderId) || "—";
-        recEl.innerHTML = "<div class=\"caption\">Trade receipt — " + tradeAttemptId + "</div>" +
-          "<div class=\"mono\">market " + selected.marketId.slice(0,10) + "… pool " + selected.pool.slice(0,10) + "…</div>" +
-          "<div>wallet " + walletAddress.slice(0,6) + "… side " + side + " qty " + (Number(qtyRaw)/1e6).toFixed(3) + " quoted " + (Number(yesPriceRaw)/1e6).toFixed(3) + "</div>" +
-          "<div>max loss " + maxLossDisplay + " · expiry " + expiryDisplay + " · policy " + policyChecks.map(function(c){return c.code}).join(",") + "</div>" +
-          "<div>tx <a class=\"mono\" href=\"https://shannon-explorer.somnia.network/tx/" + window.__lastAttemptHash + "\" target=\"_blank\">" + window.__lastAttemptHash.slice(0,10) + "…</a> · orderId " + orderIdDisplay + " · awaiting fill…</div>" +
-          "<div class=\"caption\">Actual fill price will appear via getUserFills after indexing (~3s) — quoted vs actual distinguished per GO7</div>";
+        recEl.innerHTML =
+          `<div class="receipt-head"><span class="caption">Trade completed — ${tradeAttemptId}</span><span class="badge badge-up">Mined</span></div>` +
+          `<div style="padding:10px 12px;font-size:13px">${side.replace("BUY_","")} ${(Number(qtyRaw)/1e6).toFixed(3)} contracts · max loss ${maxLossDisplay} tUSDC · <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}" target="_blank" rel="noopener">${shortHash(window.__lastAttemptHash)} ↗</a></div>` +
+          `<details><summary>View proof <span class="caption">quoted · actual · policy · fill</span></summary><div class="proof">` +
+          `<div class="prow"><span class="k">Market / pool</span><span class="v">${selected.marketId.slice(0,10)}… / ${selected.pool.slice(0,10)}…</span></div>` +
+          `<div class="prow"><span class="k">Side / qty</span><span class="v">${side} · ${(Number(qtyRaw)/1e6).toFixed(3)}</span></div>` +
+          `<div class="prow"><span class="k">Quoted</span><span class="v">${(Number(yesPriceRaw)/1e6).toFixed(3)}</span></div>` +
+          `<div class="prow"><span class="k">Actual</span><span class="v">awaiting fill (~3s via getUserFills)</span></div>` +
+          `<div class="prow"><span class="k">Max loss / expiry</span><span class="v">${maxLossDisplay} · ${expiryDisplay} UTC</span></div>` +
+          `<div class="prow"><span class="k">Policy at execution</span><span class="v">${policyChecks.map(function(c){return c.code}).join(" · ")}</span></div>` +
+          `<div class="prow"><span class="k">Wallet</span><span class="v">${walletAddress.slice(0,10)}…</span></div>` +
+          `<div class="prow"><span class="k">Tx</span><span class="v"><a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}" target="_blank" rel="noopener">${shortHash(window.__lastAttemptHash)} ↗</a></span></div>` +
+          `<div class="prow"><span class="k">Order</span><span class="v">${String(orderIdDisplay).slice(0,18)}</span></div>` +
+          `</div></details>`;
       }
     }catch(e){}
     setTimeout(()=>{ refreshFills(); window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false; }, 3000);
@@ -616,7 +678,7 @@ async function execute(side){
             await new Promise(r=>setTimeout(r,3000));
             try{
               const rc=await ex2.client.getViemClient().getTransactionReceipt({ hash: maybeHash });
-              if(rc.status==="success"){ els.execStatus.textContent=`✅ Reconciled — ${maybeHash.slice(0,10)}… status success (was UNKNOWN)`; els.execStatus.className="alert alert-success"; refreshFills(); break; }
+              if(rc.status==="success"){ els.execStatus.innerHTML=`<span class="code">RECONCILED · SUCCESS</span> Reconciled — <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${maybeHash}" target="_blank" rel="noopener">${shortHash(maybeHash)} ↗</a> (was UNKNOWN)`; els.execStatus.className="alert alert-success"; refreshFills(); break; }
               else if(rc.status==="reverted"){ els.execStatus.textContent=`Reverted after UNKNOWN — ${maybeHash.slice(0,10)}…`; els.execStatus.className="alert alert-risk"; break; }
             }catch{}
           }
@@ -652,7 +714,7 @@ els.connectBtn.onclick = connect;
 els.maxLoss.oninput = updatePreview;
 document.querySelectorAll(".tab").forEach(t=>t.onclick=(e)=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-  e.target.classList.add("active");
+  e.currentTarget.classList.add("active");
   renderPositions();
 });
 els.redeemAll.onclick = async()=>{
@@ -665,10 +727,11 @@ els.redeemAll.onclick = async()=>{
   try{
     const past = await ex.client.listPastBinaryMarkets({ status:"Finalized", limit:20 });
     els.execStatus.textContent = `Found ${past.length} Finalized — checking balances… (see console)`;
+    els.execStatus.className="alert alert-success";
     console.log(past.slice(0,3));
     // Redemption requires per-market trader.redeem — not auto without outcome check
-    els.settlementList.innerHTML = past.slice(0,5).map(m=>`<div class="muted" style="padding:12px"><div class="mono">${m.marketId.slice(0,10)}… ${m.asset} ${m.intervalSec}s</div><div class="caption">pool ${m.pool?.slice(0,10)}… expiry ${m.expiry}</div><a class="caption mono" href="https://prd.oracle.somnia.host/questions/${m.oracleQuestionId||""}?view=graph" target="_blank">Oracle graph →</a></div>`).join("");
-  }catch(e){ els.execStatus.textContent=`Redeem scan failed: ${e.message}`; }
+    els.settlementList.innerHTML = past.slice(0,5).map(m=>`<div class="settle-row"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="mono rowmain">${m.marketId.slice(0,10)}… · ${m.asset} ${m.intervalSec}s</span><span class="badge badge-void">Finalized</span></div><div class="caption">pool ${m.pool?.slice(0,10)}… · expiry ${m.expiry}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="hashlink" href="https://prd.oracle.somnia.host/questions/${m.oracleQuestionId||""}?view=graph" target="_blank" rel="noopener">Oracle graph →</a><a class="hashlink" href="https://shannon-explorer.somnia.network/" target="_blank" rel="noopener">Explorer ↗</a></div></div>`).join("") || `<div class="empty"><div class="title">No Finalized markets found</div><div class="body">Winnings appear here after settlement — void pays 0.5 per side.</div></div>`;
+  }catch(e){ els.execStatus.innerHTML=`<span class="code">REDEEM_SCAN_FAILED</span> Redeem scan failed: ${e.message}`; els.execStatus.className="alert alert-risk"; }
 };
 
 // Auto-load — shell renders first, data services attach after (decoupled)
@@ -681,6 +744,8 @@ setInterval(()=>{
   if(cooldownUntil && cooldownUntil > Date.now()){
     const sec=Math.ceil((cooldownUntil-Date.now())/1000);
     els.tiltCountdown.textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
+    const streak = window.__cooldownStreak ?? 2;
+    els.tiltMsg.textContent = `${streak} consecutive losses. Trading resumes in ${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}.`;
   }
 },1000);
 
