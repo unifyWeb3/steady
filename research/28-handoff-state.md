@@ -22,6 +22,8 @@
 | Policy consistency (account state vs execution result) | LIVE-PROVEN (browser shell) | Preview shows "Trade policy: DENIED — cooldown active" when cooling; receipt header reads "policy at execution (not current account state)"; cooldown enforced at boundary with exact code |
 | Mobile 375px | LIVE-PROVEN (browser) | Playwright PASS: 0px overflow, ticket visible, screenshot `test-results/terminal-mobile-375.png` (dark ink rail, nav tabs, loading states) |
 | Full browser suite (merged tree) | LIVE-PROVEN (browser shell) | 5/5 Playwright PASS 2026-09-04: homepage, terminal shell+timeout, mock-Rabby connect, mobile 375px, ticket render |
+| Frontend reconstruction (design.md + 38/39) | LIVE-PROVEN (browser) | Direction C Ledger Instrument; style.css v2; homepage narrative + terminal Honest Ticket; chromium qa-* shots (1280+390, 0 overflow); fixes: header nowrap, mobile empty-td, steps 1-col, mktShort last-6 IDs |
+| Live discovery rows + ticket preview | LIVE-PROVEN (browser) | 4 Trading rows (BTC/ETH 15m/1h, bid/ask, spread) + select → preview 25.00→26.04 @ 0.960 from live book 0.918/0.940 (`qa-ticket-live.png`); status success bar; no pageerror |
 
 ## Completed work
 - Research 00-27 completed, `AGENTS.md` contamination audit 0 GenLayer hits in `/home/unify/somnia` (only `4221` in deps trusted-setups hex, not GenLayer)

@@ -102,6 +102,8 @@ function stateBadge(state){
   return map[state] || "badge";
 }
 function shortHash(h){ return h && h.length>12 ? h.slice(0,8)+"…"+h.slice(-4) : (h||"—"); }
+// Market IDs are sequential (0x0000…0136e3) — first chars identical, last 6 disambiguate
+function mktShort(id){ return id && id.length>10 ? "…"+id.slice(-6) : (id||"—"); }
 function toProb(raw) { return Number(raw)/Number(ONE_6); }
 function tickSnap(priceRaw, tick){ return (priceRaw / tick) * tick; }
 
@@ -195,7 +197,7 @@ async function loadMarkets(){
       tr.dataset.marketId = m.marketId;
       tr.style.cursor="pointer";
       tr.innerHTML = `
-        <td data-l="Market"><span class="mono rowmain">${m.asset}</span> <span class="caption">${label}</span><br><span class="caption mono">${m.marketId.slice(0,10)}…</span></td>
+        <td data-l="Market"><span class="mono rowmain">${m.asset}</span> <span class="caption">${label}</span><br><span class="caption mono">${mktShort(m.marketId)}</span></td>
         <td data-l="Expiry" class="mono">${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC</td>
         <td data-l="Time left" class="mono ${cd.cls}">${cd.text}</td>
         <td data-l="Best bid / ask" class="mono num">${bidTxt} / ${askTxt}</td>
@@ -227,7 +229,7 @@ async function loadMarkets(){
 
 async function selectMarket(m){
   selected = m;
-  els.ticketMarket.textContent = `${m.asset} ${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h"} · expiry ${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC · ${m.marketId.slice(0,10)}… · pool ${m.pool.slice(0,10)}…`;
+  els.ticketMarket.textContent = `${m.asset} ${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h"} · expiry ${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC · ${mktShort(m.marketId)} · pool ${m.pool.slice(0,10)}…`;
   els.ticketMarket.title = m.marketId;
   document.querySelectorAll("#marketTbody tr.row").forEach(tr=>{
     tr.classList.toggle("selected", tr.dataset.marketId === m.marketId);
@@ -406,7 +408,7 @@ function renderPositions(){
     const sideCls = side.includes("YES") ? "badge badge-up" : side.includes("NO") ? "badge badge-down" : "badge badge-quiet";
     const tx = f.txHash || "";
     tr.innerHTML=`
-      <td data-l="Market" class="mono"><span class="rowmain">${(f.market||"").slice(0,10)}…</span><br><span class="caption">${(f.pool||"").slice(0,10)}…</span></td>
+      <td data-l="Market" class="mono"><span class="rowmain">${mktShort(f.market)}</span><br><span class="caption">${(f.pool||"").slice(0,10)}…</span></td>
       <td data-l="Side"><span class="${sideCls}">${side.replace("BUY_","")}</span></td>
       <td data-l="Fill price" class="mono num">${f.fillPrice? (Number(f.fillPrice)/1e6).toFixed(3): "—"}</td>
       <td data-l="Qty" class="mono num">${f.quantity? (Number(f.quantity)/1000).toFixed(3): "—"}</td>
@@ -648,7 +650,7 @@ async function execute(side){
           `<div class="receipt-head"><span class="caption">Trade completed — ${tradeAttemptId}</span><span class="badge badge-up">Mined</span></div>` +
           `<div style="padding:10px 12px;font-size:13px">${side.replace("BUY_","")} ${(Number(qtyRaw)/1e6).toFixed(3)} contracts · max loss ${maxLossDisplay} tUSDC · <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}" target="_blank" rel="noopener">${shortHash(window.__lastAttemptHash)} ↗</a></div>` +
           `<details><summary>View proof <span class="caption">quoted · actual · policy · fill</span></summary><div class="proof">` +
-          `<div class="prow"><span class="k">Market / pool</span><span class="v">${selected.marketId.slice(0,10)}… / ${selected.pool.slice(0,10)}…</span></div>` +
+          `<div class="prow"><span class="k">Market / pool</span><span class="v">${mktShort(selected.marketId)} / ${selected.pool.slice(0,10)}…</span></div>` +
           `<div class="prow"><span class="k">Side / qty</span><span class="v">${side} · ${(Number(qtyRaw)/1e6).toFixed(3)}</span></div>` +
           `<div class="prow"><span class="k">Quoted</span><span class="v">${(Number(yesPriceRaw)/1e6).toFixed(3)}</span></div>` +
           `<div class="prow"><span class="k">Actual</span><span class="v">awaiting fill (~3s via getUserFills)</span></div>` +
@@ -730,7 +732,7 @@ els.redeemAll.onclick = async()=>{
     els.execStatus.className="alert alert-success";
     console.log(past.slice(0,3));
     // Redemption requires per-market trader.redeem — not auto without outcome check
-    els.settlementList.innerHTML = past.slice(0,5).map(m=>`<div class="settle-row"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="mono rowmain">${m.marketId.slice(0,10)}… · ${m.asset} ${m.intervalSec}s</span><span class="badge badge-void">Finalized</span></div><div class="caption">pool ${m.pool?.slice(0,10)}… · expiry ${m.expiry}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="hashlink" href="https://prd.oracle.somnia.host/questions/${m.oracleQuestionId||""}?view=graph" target="_blank" rel="noopener">Oracle graph →</a><a class="hashlink" href="https://shannon-explorer.somnia.network/" target="_blank" rel="noopener">Explorer ↗</a></div></div>`).join("") || `<div class="empty"><div class="title">No Finalized markets found</div><div class="body">Winnings appear here after settlement — void pays 0.5 per side.</div></div>`;
+    els.settlementList.innerHTML = past.slice(0,5).map(m=>`<div class="settle-row"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="mono rowmain">${mktShort(m.marketId)} · ${m.asset} ${m.intervalSec}s</span><span class="badge badge-void">Finalized</span></div><div class="caption">pool ${m.pool?.slice(0,10)}… · expiry ${m.expiry}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="hashlink" href="https://prd.oracle.somnia.host/questions/${m.oracleQuestionId||""}?view=graph" target="_blank" rel="noopener">Oracle graph →</a><a class="hashlink" href="https://shannon-explorer.somnia.network/" target="_blank" rel="noopener">Explorer ↗</a></div></div>`).join("") || `<div class="empty"><div class="title">No Finalized markets found</div><div class="body">Winnings appear here after settlement — void pays 0.5 per side.</div></div>`;
   }catch(e){ els.execStatus.innerHTML=`<span class="code">REDEEM_SCAN_FAILED</span> Redeem scan failed: ${e.message}`; els.execStatus.className="alert alert-risk"; }
 };
 

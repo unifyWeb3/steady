@@ -1,6 +1,6 @@
 # Implementation Status — Steady
 
-Last updated: 2026-09-04 — Gates 1-4 re-PASS + frontend reliability fix + browser QA (chromium); real-popup signing still CODE-EXISTS-BUT-UNVERIFIED
+Last updated: 2026-09-04 — Frontend reconstruction (design.md + 38/39) browser-QA'd (chromium qa-* shots, 0 overflow); gates 1-4 re-PASS + dist 84K no secrets; real-popup signing still CODE-EXISTS-BUT-UNVERIFIED
 
 ## Current Phase
 **Phase 1 — Steady Live** — **Gates 1-5 Re-verified 2026-09-03, 13 unit tests PASS, app shell live :5173 (real SDK via esm.sh, warm paper, no purple glow), lib/dreamdex + lib/steady complete**
@@ -23,6 +23,7 @@ Last updated: 2026-09-04 — Gates 1-4 re-PASS + frontend reliability fix + brow
 - [x] `app/` static shell (warm paper, JetBrains Mono, no purple glow) on :5173 with real SDK via esm.sh, wallet via window.ethereum, no mocks
 - [x] `tests/unit` 13/13 PASS (ticket, scoring, discipline) — pure, deterministic, no SDK mocks
 - [x] `npm run validate` re-verified 2026-09-03 19:26: 14 live, Trading pool 0x171186a2, book 0.751/0.777, tick 1000
+- [x] Frontend reconstruction 2026-09-04: `design.md` system + `research/38` (direction C selected) + homepage/terminal rebuild + `research/39` browser QA (qa-* shots 1280/390, 4 live rows, live ticket 25.00→26.04, fixes: header nowrap, mobile empty-td, steps 1-col, mktShort IDs); gates 1-4 re-PASS 2026-09-04 (14 live, book 0.590/0.619, tick/lot 1000), 13/13 unit, dist 84K no secrets
 
 ## Validation Gates (must pass before `app/`)
 
