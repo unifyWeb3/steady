@@ -140,3 +140,8 @@ Gate 5 proved via privateKey (0xed05c…72464c) + walletClient both directions (
 - Do not skip `npm run validate` re-check before Phase 1 starts
 
 If interrupted, verify: `npm run validate` then `npm run validate:write` (should still show fill count ≥2 and same wallet).
+
+## Production build (2026-09-03)
+- npm run build → mkdir -p dist && cp -r app/* dist/ (static, no bundling, esm.sh CDN) — success dist 52K
+- Smoke test dist http://localhost:5174/ 200, no secrets in dist (grep TEST_WALLET_PRIVATE_KEY 0 hits)
+- Not yet deployed to Vercel (requires manual vercel --prod), but build is Vercel-ready static

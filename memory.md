@@ -32,3 +32,5 @@
 **Latest verification 2026-09-03 20:50:** Redemption LIVE-PROVEN market 0x...1074a winning 0 YES bal 1000→0 via 0x3aa5ec…77444 block 478925556 delta +0.001 tUSDC. Policy at boundary now enforced (maxSpread 0.15, tradeAttemptId, SUBMITTING disable). App still serves :5173, no backend.
 
 **2026-09-03 21:37 walletClient both directions LIVE-PROVEN:** BUY_YES 0x6f6beb80… (quoted 742000→ fill 722000) + BUY_NO 0x88285864… (quoted 258000→ fill 701000) on 0x...12994 pool 0x443904… via createWalletClient http (same createTrader as browser). Tilt guard now wired to real deriveDiscipline, tradeAttemptId + SUBMITTING disable + UNKNOWN reconciliation + receipt quoted vs actual. Refresh 90s discovery, 1s local countdown.
+
+**Visual QA:** Code inspection PASS per 30, curl 200, warm paper, no purple glow, responsive 1280/16px, dist 52K build success, no secrets, screenshots deferred (no chromium).
