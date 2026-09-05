@@ -108,3 +108,10 @@
 - Competitors: Tock (arcade+streaks), volatility Agent (custom router — weaker DreamDEX-dependence), Pryzm swarm, sigma odds layer. Rivo unverified rumor. No one in discipline wedge. Adopted one idea: shareable receipt card (text+link, no gamification).
 - Honest score: 73/100 (80 with video + manual E2E). Research/43-50 written.
 - Hygiene: debug logs gated behind localStorage steady:debug; homepage preview relabeled illustrative.
+
+## 2026-09-05 — Release-candidate audit (51-60)
+- Rules re-locked live: Sep 8 18:00, $5k, testnet+GitHub+video, no tracks, 27 BUIDLs/345 hackers. SDK still 0.29.0, no drift.
+- Forensics re-PASS just now on all 4 txs (success, blocks/gas match handoff).
+- Fresh intel: Tock live+breathed (proof/MCP/rides), PredicTrader live (ensemble+copy), Dungeon HAS VIDEO + mainnet, Agent verified contract. Rivo unverified rumor. Adopted: receipt share-card (text+link only).
+- Honest score 73 → ~80 with video + manual E2E. No scope added; P1 hygiene (debug gate, preview relabel, lot caption, side-aware preview) applied and verified (APP_OK, 13/13, 5/5 browser).
+- Secrets re-PASS. No DB justified (48). No gimmicks found (49).
