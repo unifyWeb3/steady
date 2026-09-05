@@ -165,3 +165,17 @@ If interrupted, verify: `npm run validate` then `npm run validate:write` (should
 - npm run build → mkdir -p dist && cp -r app/* dist/ (static, no bundling, esm.sh CDN) — success dist 52K
 - Smoke test dist http://localhost:5174/ 200, no secrets in dist (grep TEST_WALLET_PRIVATE_KEY 0 hits)
 - Not yet deployed to Vercel (requires manual vercel --prod), but build is Vercel-ready static
+
+## Penultimate audit (2026-09-05, branch frontend-reconstruction-v2 @ 93b0a9d)
+- Rules re-verified live: Sep 8 18:00 (treat as UTC, submit by Sep 8 12:00 UTC), $5k USDso single pool, testnet+GitHub+video required, no tracks, 16 BUIDLs/314 hackers. Research/43.
+- Forensics re-PASS just now: 0xed05c (b477265538), 0x3aa5ec (b478925556), 0x6f6beb (b478978327), 0x882858 (b478978375) — all success, senders/pools match handoff.
+- Secrets PASS: no 64-hex keys in source/dist/history; .env never committed.
+- Competitors verified: Tock arcade+streaks, volatility Agent (custom router, weaker DreamDEX-dependence), Pryzm swarm, sigma odds layer; Rivo = unverified rumor. Adopted: shareable receipt card. Research/44.
+- Honest score 73/100 → ~80 with video + manual E2E. Research/45. Innovation thesis: accountability as product (46).
+- Interaction audit (47): no dead controls; tilt/positions PARTIAL as before; receipt panel wired.
+- State audit (48): no DB justified; one gap — receipt view lost on reload (P2, localStorage).
+- Gimmick audit (49): clean; debug logs gated, preview relabeled; dead refs guarded.
+- Readiness (50): top-5 = manual E2E hash, README/LICENSE/public-flip, hygiene (done), vercel --prod (no auth in env), video + SDK feedback.
+- Artifacts: README + LICENSE added; vercel.json ready; dist/ rebuilt (uncommitted? rebuilt — verify before submit).
+- Branch note: this audit committed on frontend-reconstruction-v2 (93b0a9d, pushed). main stays at 6067026 until reconstruction merges. Other session's untracked research/40-42/GEMINI-*/design-qa left for that session.
+- DO NOT claim: popup E2E, video, deploy, submission-ready.

@@ -36,3 +36,5 @@
 **Visual QA:** Code inspection PASS per 30, curl 200, warm paper, no purple glow, responsive 1280/16px, dist 52K build success, no secrets, screenshots deferred (no chromium).
 
 **Frontend reconstruction 2026-09-04 (design.md + 38/39):** direction C Ledger Instrument selected; style.css v2 system; homepage narrative + terminal Honest Ticket (risk hero, verb-forward buys, policy line), ink-solid cooldown, progressive-disclosure receipt, mktShort last-6 IDs; browser-proven chromium screenshots test-results/qa-* (home/terminal 1280+390, overflow 0, 4 live rows, live ticket preview 25.00→26.04); fixed header wrap, mobile empty-td, steps 1-col; tests 13/13, validate gates 1-4 re-PASS, dist 84K no secrets.
+
+**Audit 2026-09-05:** penultimate audit on branch frontend-reconstruction-v2 @93b0a9d (pushed). Rules/forensics/browser re-verified; README+LICENSE added; honest 73/100. Remaining: manual popup hash, vercel --prod, video, public flip. Main untouched at 6067026.
