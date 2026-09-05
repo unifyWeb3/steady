@@ -4,7 +4,7 @@
 
 **Architecture:** Browser → SDK (SomniaMarkets 0.29.0, SOMNIA_TESTNET_ADDRESSES) → indexer dev.smk + WS wss://api.infra.testnet.somnia.network/ws → chain. No backend/DB; lib/dreamdex (real SDK) + lib/steady (pure) + app/ (warm paper static via esm.sh, window.ethereum). See research/31.
 
-**Phase:** Phase 1 hardening merged 2026-09-04. Gates 1-4 re-PASS (node). Unit 13/13 PASS. Browser 5/5 PASS (chromium): homepage, terminal shell+timeout, mock-Rabby connect, mobile 375px (0 overflow), ticket render. Ticket preview = executable price, policy DENIED shown during cooldown, receipt = policy-at-execution. Real popup signing CODE-EXISTS-BUT-UNVERIFIED. dist/ 84K rebuilt, no prod URL yet.
+**Phase:** Penultimate audit 2026-09-05 (deadline Sep 8 18:00 UTC). Rules re-verified; forensics 4/4 re-PASS; 5/5 browser PASS; README+LICENSE added; honest score 73/100 (80 with video+E2E). Remaining: manual popup E2E (+DOWN), vercel --prod (no auth in env), demo video, repo public flip.
 
 **Verified protocol:** listLiveBinaryMarkets 14 live (60/300/900/3600 BTC/ETH), getMarketOnchain status 1 Trading, getBinaryOrderBook 0.751/0.777 spread, tick/lot 1000, IOC 2 with expire nanos, faucet 10k tUSDC.
 

@@ -100,3 +100,11 @@
 - Policy consistency: preview shows DENIED during cooldown; receipt labeled policy-at-execution; cooldown enforced at boundary.
 - Browser (chromium 1234): 5/5 Playwright PASS on merged tree; mobile 375px 0 overflow + screenshot; indexer timeout path exercised honestly (transient from this env, node harness passes when reachable).
 - Real-popup signing still CODE-EXISTS-BUT-UNVERIFIED (mock throws honestly on eth_sendTransaction). No mocks as real. dist/ rebuilt 84K.
+
+## 2026-09-05 — Penultimate audit (3 days to deadline)
+- Rules re-verified live (DoraHacks): Sep 8 18:00, $5k USDso, testnet+GitHub+video, no tracks, 16 BUIDLs/314 hackers. Gaps found: NO README, NO LICENSE → both written from verified evidence only.
+- Forensics re-PASS: all 4 headline txs success on-chain just now (0xed05c b477265538, 0x3aa5ec b478925556, 0x6f6beb b478978327, 0x882858 b478978375).
+- Secrets scan PASS: no 64-hex keys in source/dist/history; .env never committed.
+- Competitors: Tock (arcade+streaks), volatility Agent (custom router — weaker DreamDEX-dependence), Pryzm swarm, sigma odds layer. Rivo unverified rumor. No one in discipline wedge. Adopted one idea: shareable receipt card (text+link, no gamification).
+- Honest score: 73/100 (80 with video + manual E2E). Research/43-50 written.
+- Hygiene: debug logs gated behind localStorage steady:debug; homepage preview relabeled illustrative.

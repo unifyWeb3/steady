@@ -82,15 +82,15 @@ test.describe("Steady", () => {
     page.on("console", m => console.log("[wallet]", m.type(), m.text().slice(0,300)));
     page.on("pageerror", e => console.log("[wallet] pageerror", String(e).slice(0,500)));
     await page.goto("http://localhost:5173/terminal.html", { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(4000);
     const btn = page.locator("#connectBtn");
     await expect(btn).toBeVisible();
     await btn.click();
     const addr = page.locator("#walletAddr");
     await expect(addr).toContainText("0x0d6F", { timeout: 10000 });
     const status = page.locator("#statusBar");
-    // SDK load (~10s esm.sh) + RPC balance read; allow 25s. Honest states only.
-    await expect(status).toContainText(/Connected|Connect failed/, { timeout: 25000 });
+    // SDK load (~10s esm.sh) + RPC balance read; allow 30s. Honest states only.
+    await expect(status).toContainText(/Connected|Connect failed/, { timeout: 30000 });
     await safeShot(page, "test-results/terminal-connected.png");
   });
 
