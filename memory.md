@@ -4,7 +4,7 @@
 
 **Architecture:** Browser → SDK (SomniaMarkets 0.29.0, SOMNIA_TESTNET_ADDRESSES) → indexer dev.smk + WS wss://api.infra.testnet.somnia.network/ws → chain. No backend/DB; lib/dreamdex (real SDK) + lib/steady (pure) + app/ (warm paper static via esm.sh, window.ethereum). See research/31.
 
-**Phase:** Phase 1 hardening merged 2026-09-04. Gates 1-4 re-PASS (node). Unit 13/13 PASS. Browser 5/5 PASS (chromium): homepage, terminal shell+timeout, mock-Rabby connect, mobile 375px (0 overflow), ticket render. Ticket preview = executable price, policy DENIED shown during cooldown, receipt = policy-at-execution. Real popup signing CODE-EXISTS-BUT-UNVERIFIED. dist/ 84K rebuilt, no prod URL yet.
+**Phase:** Penultimate audit 2026-09-05 (deadline Sep 8 18:00 UTC). Rules re-verified; forensics 4/4 re-PASS; 5/5 browser PASS; README+LICENSE added; honest score 73/100 (80 with video+E2E). Remaining: manual popup E2E (+DOWN), vercel --prod (no auth in env), demo video, repo public flip.
 
 **Verified protocol:** listLiveBinaryMarkets 14 live (60/300/900/3600 BTC/ETH), getMarketOnchain status 1 Trading, getBinaryOrderBook 0.751/0.777 spread, tick/lot 1000, IOC 2 with expire nanos, faucet 10k tUSDC.
 
@@ -36,3 +36,9 @@
 **Visual QA:** Code inspection PASS per 30, curl 200, warm paper, no purple glow, responsive 1280/16px, dist 52K build success, no secrets, screenshots deferred (no chromium).
 
 **Frontend reconstruction 2026-09-04 (design.md + 38/39):** direction C Ledger Instrument selected; style.css v2 system; homepage narrative + terminal Honest Ticket (risk hero, verb-forward buys, policy line), ink-solid cooldown, progressive-disclosure receipt, mktShort last-6 IDs; browser-proven chromium screenshots test-results/qa-* (home/terminal 1280+390, overflow 0, 4 live rows, live ticket preview 25.00→26.04); fixed header wrap, mobile empty-td, steps 1-col; tests 13/13, validate gates 1-4 re-PASS, dist 84K no secrets.
+
+**Audit 2026-09-05:** penultimate audit on branch frontend-reconstruction-v2 @93b0a9d (pushed). Rules/forensics/browser re-verified; README+LICENSE added; honest 73/100. Remaining: manual popup hash, vercel --prod, video, public flip. Main untouched at 6067026.
+
+**RC audit 2026-09-05:** research/51-60 done. Rules unchanged, forensics 4/4 re-PASS, Tock/PredicTrader/Dungeon mapped, honest 73/100. P0 tail: manual popup hash, video, vercel --prod, public flip.
+
+**Final window 2026-09-05:** faucet button live in ticket (browser-verified render). Vercel BLOCKED (no auth, whoami hangs). Human brief ready: 1h/4h window, max loss 2, UP then DOWN. Branch frontend-reconstruction-v2.

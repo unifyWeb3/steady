@@ -11,6 +11,7 @@ const s=http.createServer((req,res)=>{
   if(!fs.existsSync(file)){ res.writeHead(404, {'Content-Type':'text/plain'}); return res.end('not found '+p); }
   const ext=path.extname(file);
   res.writeHead(200, {'Content-Type': mime[ext]||'text/plain', 'Access-Control-Allow-Origin':'*', 'Cache-Control':'no-cache'});
+  if (req.method === 'HEAD') return res.end();
   fs.createReadStream(file).pipe(res);
 });
 const port=5173;

@@ -1,6 +1,6 @@
 # Implementation Status — Steady
 
-Last updated: 2026-09-04 — Frontend reconstruction (design.md + 38/39) browser-QA'd (chromium qa-* shots, 0 overflow); gates 1-4 re-PASS + dist 84K no secrets; real-popup signing still CODE-EXISTS-BUT-UNVERIFIED
+Last updated: 2026-09-05 — Penultimate audit: rules re-verified (Sep 8 18:00 UTC, $5k, 16 BUIDLs, no tracks); forensics re-PASS (4/4 txs success on-chain); 5/5 browser PASS; README+LICENSE added; debug logs gated + preview relabeled; popup signing + video + prod deploy remain
 
 ## Current Phase
 **Phase 1 — Steady Live** — **Gates 1-5 Re-verified 2026-09-03, 13 unit tests PASS, app shell live :5173 (real SDK via esm.sh, warm paper, no purple glow), lib/dreamdex + lib/steady complete**
