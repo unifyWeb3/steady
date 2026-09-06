@@ -214,3 +214,8 @@ If interrupted, verify: `npm run validate` then `npm run validate:write` (should
 - Frontend wiring complete: real redeem, enriched ledger, live policy gate, 4h/1d, copy-proof. Verification: 29/29 unit, 5/5 Playwright (during outage), shipped-resolver 6/6, gate DOM ○+Check. See IMPLEMENTATION-STATUS.
 - Indexer 504 outage at verify time — app degrades honestly (proven in-test). Re-run `npm run validate` when green before demo recording.
 - Human tail unchanged: popup UP/DOWN hashes (incl. one REDEEMED tx — 3 claimables waiting) → video → public flip → BUIDL before Sep 8 12:00 UTC.
+
+## Redeem post-mortem (2026-09-06 night — user caught it dead, fixed + proven)
+- Causes: indexer 504 (no fallback) + BUY_NO over-cross misprice + half-connected wallet + cached SDK failure + missing timeouts + decorative balance gate. All fixed in `app.js`; `crossingYesPriceForSide` added to lib + 5 pricing tests (34/34).
+- Browser proof during outage: on-chain fallback found all 3 claimables → redeemMany attempted → blocked only by mock signing. Real wallet = one popup away.
+- Repo now PUBLIC. Indexer still 504 at last check — re-run `npm run validate` when green, then record.

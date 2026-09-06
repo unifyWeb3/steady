@@ -63,3 +63,18 @@ export function crossingPriceFromBook(bestAskRaw: bigint | undefined, tick: bigi
   const capped = withSlippage >= 1_000_000n ? bestAskRaw : withSlippage;
   return snapPrice(capped, tick);
 }
+
+// Side-aware YES-limit construction (SDK writer.js escrow: BUY_YES pays `price`,
+// BUY_NO pays `1−price` per token; toBinaryBook: noAsks = 1−yesBids).
+// UP crosses YES asks; DOWN crosses NO asks — both by 0.02 in YES-limit terms.
+// Pure and unit-tested; app/app.js execute()/computeTicket port it verbatim.
+export function crossingYesPriceForSide(args: {
+  side: Side;
+  bestYesAskRaw: bigint;
+  bestNoAskRaw: bigint | null;
+}): bigint {
+  if (args.side === "BUY_YES") return args.bestYesAskRaw + 20_000n;
+  if (args.bestNoAskRaw !== null && args.bestNoAskRaw !== undefined)
+    return 1_000_000n - (args.bestNoAskRaw + 20_000n);
+  return args.bestYesAskRaw + 20_000n; // NO side unquoted: same YES cross
+}

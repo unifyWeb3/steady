@@ -11,7 +11,7 @@ let _sdkError = null;
 function loadSdk(timeoutMs = 30000){
   if(localStorage.getItem("steady:debug")) console.log("loadSdk started");
   if(_sdk) return Promise.resolve(_sdk);
-  if(_sdkError) return Promise.reject(_sdkError);
+  // No permanent error cache: esm.sh/indexer blips must not brick Retry until reload.
   const p = (async()=>{
     if(localStorage.getItem("steady:debug")) console.log("importing @somnia-chain/markets-sdk");
     const [sdk, chains, viem] = await Promise.all([
@@ -24,7 +24,7 @@ function loadSdk(timeoutMs = 30000){
     return _sdk;
   })();
   const t = new Promise((_,rej)=>setTimeout(()=>rej(new Error(`SDK import timeout after ${timeoutMs}ms — esm.sh slow/blocked, Retry`)), timeoutMs));
-  return Promise.race([p, t]).catch(e=>{ _sdkError = e; throw e; });
+  return Promise.race([p, t]).catch(e=>{ _sdkError = e; setTimeout(()=>{ if(_sdkError === e) _sdkError = null; }, 15000); throw e; });
 }
 
 const els = {
@@ -79,6 +79,32 @@ let fillsCache = []; // settled + open
 let cooldownUntil = null;
 let marketsCache = [];
 
+// Outage cache: bigint-safe persist so returning wallets keep working when the
+// indexer is down (chain RPC reads still resolve states fully on-chain).
+const _bj = {
+  stringify: (o)=> JSON.stringify(o, (k,v)=> (typeof v === "bigint" ? { __bigint: v.toString() } : v)),
+  parse: (s)=> JSON.parse(s, (k,v)=> (v && typeof v === "object" && typeof v.__bigint === "string") ? BigInt(v.__bigint) : v),
+};
+function persistCache(){
+  try{
+    localStorage.setItem("steady:marketsCache", _bj.stringify({ at: Date.now(), rows: marketsCache.slice(0,12) }));
+    localStorage.setItem("steady:fillsCache", _bj.stringify({ at: Date.now(), rows: fillsCache.slice(0,50) }));
+  }catch{}
+}
+function restoreCache(){
+  try{
+    const m = _bj.parse(localStorage.getItem("steady:marketsCache") || "null");
+    const f = _bj.parse(localStorage.getItem("steady:fillsCache") || "null");
+    if(m && Array.isArray(m.rows) && !marketsCache.length) marketsCache = m.rows;
+    if(f && Array.isArray(f.rows) && !fillsCache.length) fillsCache = f.rows;
+    return { markets: !!(m && m.rows && m.rows.length), fills: !!(f && f.rows && f.rows.length) };
+  }catch{ return { markets:false, fills:false }; }
+}
+function isIndexerError(e){
+  const m = ((e && e.message) ? e.message : String(e)) || "";
+  return /504|502|503|indexer|timeout|Timeout|UND_ERR|ConnectTimeout|fetch failed|Failed to fetch|NetworkError/i.test(m);
+}
+
 // Init SDK (reads, no key) — async: waits for lazy SDK load
 async function getExchange() {
   if (exchange) return exchange;
@@ -113,6 +139,14 @@ function shortHash(h){ return h && h.length>12 ? h.slice(0,8)+"…"+h.slice(-4) 
 function mktShort(id){ return id && id.length>10 ? "…"+id.slice(-6) : (id||"—"); }
 function toProb(raw) { return Number(raw)/Number(ONE_6); }
 function tickSnap(priceRaw, tick){ return (priceRaw / tick) * tick; }
+// Indexer calls hang (not just fail fast) during outages — every indexer-backed
+// read races a timeout so the UI degrades instead of dangling mid-sentence.
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, rej)=> setTimeout(()=> rej(new Error(`${label || "Indexer read"} timed out after ${Math.round(ms/1000)}s — retry`)), ms)),
+  ]);
+}
 
 let walletStatusText = "";
 
@@ -179,6 +213,7 @@ async function loadMarkets(){
     }
     eligible.sort((a,b)=>a.expirySec-b.expirySec);
     marketsCache = eligible;
+    try{ persistCache(); }catch{}
     els.marketCount.textContent = `${eligible.length} live`;
     if (eligible.length===0){
       els.marketTbody.innerHTML = "";
@@ -273,13 +308,16 @@ function computeTicket(maxLossHuman, side){
   const tick = BigInt(bookParams.tickSize);
   const lot = BigInt(bookParams.lotSize);
   const minQty = BigInt(bookParams.minQuantity);
-  // Preview uses the SAME executable price as execute(): live bestAsk +0.02 cross, tick-snapped.
-  // BUY_NO is priced in YES terms (DOWN prob = 1 - YES), matching SDK semantics.
-  const _bestAskRaw = book?.yesAsks?.[0]?.price ? BigInt(book.yesAsks[0].price) : 500_000n;
-  let _yesPrice = (side==="BUY_YES") ? (_bestAskRaw + 20000n) : (1_000_000n - (_bestAskRaw + 20000n));
-  if(_yesPrice>=1_000_000n) _yesPrice = 999000n;
-  if(_yesPrice<=0n) _yesPrice = 1000n;
+  // Preview uses the SAME executable price as execute(): cross the side-relevant
+  // book by 0.02 in YES-limit terms (SDK escrow: BUY_NO pays 1−price per NO).
+  // DOWN probability reads off the NO book — never 1−YESask as before.
+  const _bestAskRaw = (book?.yesAsks?.[0]?.price !== undefined && book?.yesAsks?.[0]?.price !== null) ? BigInt(book.yesAsks[0].price) : 500_000n;
+  const _bestNoAskRaw = (book?.noAsks?.[0]?.price !== undefined && book?.noAsks?.[0]?.price !== null) ? BigInt(book.noAsks[0].price) : null;
+  let _yesPrice = (side === "BUY_YES") ? (_bestAskRaw + 20000n)
+    : (_bestNoAskRaw !== null ? (1_000_000n - (_bestNoAskRaw + 20000n)) : (_bestAskRaw + 20000n));
+  if (_yesPrice >= 1_000_000n || _yesPrice <= 0n) return { error: `No executable ${side === "BUY_YES" ? "UP" : "DOWN"} price on this book — try the next window` };
   const snapped = (_yesPrice / tick) * tick;
+  if (snapped <= 0n || snapped >= 1_000_000n) return { error: `Price off tick grid — try the next window` };
   const sidePrice = (side==="BUY_YES") ? snapped : (1_000_000n - snapped);
   // real available balance if connected, else fallback 10k for preview
   const availableRaw = (window.__tUSDCBalance !== undefined ? window.__tUSDCBalance : 10_000_000n * 1000n);
@@ -414,11 +452,14 @@ async function connect(){
   if (!provider) { alert("No injected wallet — install Rabby or MetaMask"); return; }
   els.connectBtn.disabled = true;
   setStatus("Connecting wallet…", "");
+  // Atomic connect: the UI only ever shows "Connected" AFTER a usable walletClient
+  // exists. A half-connected address label with a dead trader cost us a real
+  // debugging session — never again.
+  let _addr = null, _wc = null;
   try{
     const accounts = await provider.request({ method: "eth_requestAccounts" });
-    walletAddress = accounts[0];
-    els.walletAddr.textContent = walletAddress.slice(0,6)+"…"+walletAddress.slice(-4);
-    els.connectBtn.textContent = "Connected";
+    if(!accounts || !accounts[0]) throw new Error("Wallet returned no accounts");
+    _addr = accounts[0];
     // check chain
     const chainIdHex = await provider.request({ method: "eth_chainId" });
     const chainId = parseInt(chainIdHex,16);
@@ -428,7 +469,14 @@ async function connect(){
       }
     }
     const sdk0 = await loadSdk();
-    walletClient = sdk0.viem.createWalletClient({ chain: sdk0.somniaShannon, transport: sdk0.viem.custom(provider), account: walletAddress });
+    _wc = sdk0.viem.createWalletClient({ chain: sdk0.somniaShannon, transport: sdk0.viem.custom(provider), account: _addr });
+    if(!_wc) throw new Error("Could not build wallet client for this provider");
+    // Commit: only now is the wallet actually usable.
+    walletAddress = _addr;
+    walletClient = _wc;
+    els.walletAddr.textContent = walletAddress.slice(0,6)+"…"+walletAddress.slice(-4);
+    els.walletAddr.title = walletAddress;
+    els.connectBtn.textContent = "Connected";
     // fetch tUSDC for honest ticket capping
     try{
       const ex2 = await getExchange();
@@ -437,12 +485,20 @@ async function connect(){
       walletStatusText = `Connected ${walletAddress.slice(0,6)}… on 50312`;
       setStatus(`tUSDC ${(Number(bal)/1e6).toFixed(2)} — fetching fills…`, "success");
     }catch(e){
-      window.__tUSDCBalance = 10_000_000n * 1000n;
+      window.__tUSDCBalance = undefined; // unknown — never invent a balance; policy shows ○
       walletStatusText = `Connected ${walletAddress.slice(0,6)}… on 50312`;
       setStatus(`fetching fills…`, "success");
     }
     await refreshFills();
-  }catch(e){ setStatus(`Connect failed: ${e.message}`, "risk"); }
+  }catch(e){
+    walletAddress = null;
+    walletClient = null;
+    els.walletAddr.textContent = "—";
+    els.walletAddr.title = "Not connected";
+    els.connectBtn.textContent = "Connect";
+    walletStatusText = "";
+    setStatus(`Connect failed: ${(e.message || String(e)).slice(0,140)}`, "risk");
+  }
   finally{ els.connectBtn.disabled = false; }
 }
 
@@ -475,13 +531,27 @@ async function refreshFills(){
   try{ ex = await getExchange(); }
   catch(e){ console.error("refreshFills SDK unavailable:", e.message); return; }
   try{
-    const fills = await ex.client.getUserFills(walletAddress, { since: 0, limit: 50 });
+    const fills = await withTimeout(ex.client.getUserFills(walletAddress, { since: 0, limit: 50 }), 15000, "Fills read");
     fillsCache = fills;
+    try{ persistCache(); }catch{}
     await resolveFillStates(ex); // onchain status + ERC-6909 balances, bounded + best-effort
     renderPositions();
     renderScore();
     renderDiscipline();
-  }catch(e){ console.error(e); }
+  }catch(e){
+    console.error(e);
+    // Indexer down but chain alive: serve cached fills with LIVE on-chain states.
+    if(isIndexerError(e)){
+      const had = restoreCache();
+      if(had.fills){
+        try{ await resolveFillStates(ex); }catch{}
+        renderPositions();
+        renderDiscipline();
+        setStatus("Indexer down — cached fills with live on-chain states", "risk");
+        return;
+      }
+    }
+  }
 }
 
 // Bounded enrichment: unique markets only (≤8), every read guarded — one revert
@@ -727,11 +797,19 @@ async function execute(side){
     const tick = BigInt(params.tickSize), lot = BigInt(params.lotSize), minQty = BigInt(params.minQuantity);
     const bookNow = await ex.client.getBinaryOrderBook(selected.pool, { depth: 5 });
     if (!bookNow.yesAsks?.length && !bookNow.yesBids?.length){ els.execStatus.textContent="Empty book — no liquidity on either side (honest, not fake). Try next window."; els.execStatus.className="alert alert-risk"; _resetSubmit(); return; }
-    const bestAskRaw = bookNow.yesAsks?.[0]?.price ? BigInt(bookNow.yesAsks[0].price) : 500_000n;
-    // For BUY_NO, price is inverted? SDK expects YES price always — BUY_NO price = ONE - yesPrice? But we use BUY_YES/BUY_NO side handling: SDK price is always YES price. For BUY_NO at 0.45 prob, YES price = 0.55. So we map.
+    const bestAskRaw = bookNow.yesAsks?.[0]?.price !== undefined && bookNow.yesAsks?.[0]?.price !== null ? BigInt(bookNow.yesAsks[0].price) : 500_000n;
+    const bestNoAskRaw = bookNow.noAsks?.[0]?.price !== undefined && bookNow.noAsks?.[0]?.price !== null ? BigInt(bookNow.noAsks[0].price) : null;
+    // Refuse honestly when YOUR side has no resting liquidity — a sent IOC would
+    // burn gas to fill nothing (ImmediateOrCancelNoFill by another name).
+    if (side === "BUY_YES" && !(bookNow.yesAsks && bookNow.yesAsks.length)) { els.execStatus.textContent = "No UP (YES) liquidity on this window — try the next window or Buy DOWN."; els.execStatus.className = "alert alert-risk"; _resetSubmit(); return; }
+    if (side === "BUY_NO" && !(bookNow.noAsks && bookNow.noAsks.length)) { els.execStatus.textContent = "No DOWN (NO) liquidity on this window — try the next window or Buy UP."; els.execStatus.className = "alert alert-risk"; _resetSubmit(); return; }
+    // YES-limit semantics (SDK escrow: BUY_YES pays price, BUY_NO pays 1−price per
+    // token). Cross the SIDE-relevant book by 0.02: YES asks for UP, NO asks for DOWN.
+    // (writer.js escrow: BUY_NO amount = qty×(1−price); toBinaryBook: noAsks = 1−yesBids.)
     let yesPriceRaw;
-    if (side==="BUY_YES") yesPriceRaw = (bestAskRaw + 20000n);
-    else yesPriceRaw = 1_000_000n - (bestAskRaw + 20000n); // approximate
+    if (side === "BUY_YES") yesPriceRaw = (bestAskRaw + 20000n);
+    else if (bestNoAskRaw !== null) yesPriceRaw = 1_000_000n - (bestNoAskRaw + 20000n);
+    else yesPriceRaw = (bestAskRaw + 20000n); // NO side unquoted: same YES cross (fills vs implied NO)
     yesPriceRaw = (yesPriceRaw / tick) * tick;
     if (yesPriceRaw<=0n || yesPriceRaw>=ONE_6){ els.execStatus.textContent=`Invalid price ${yesPriceRaw} after tick snap`; els.execStatus.className="alert alert-risk"; _resetSubmit(); return; }
     // qty from maxLoss: qty = maxLoss / (side price)
@@ -769,11 +847,27 @@ async function execute(side){
     let qtyRaw = (maxLossRaw * ONE_6) / sidePrice;
     qtyRaw = (qtyRaw / lot) * lot;
     if (qtyRaw < minQty){ els.execStatus.textContent=`Quantity ${Number(qtyRaw)/1e6} below min — increase max loss`; els.execStatus.className="alert alert-risk"; _resetSubmit(); return; }
+    // Balance gate AT the boundary (the ticket's "Balance Sufficient" row is otherwise
+    // decorative): refuse before any signature with exact have/need numbers.
+    try{
+      const _addrs = getSdkAddrs();
+      if(_addrs && _addrs.collateral){
+        const _bal = await ex.client.getErc20Balance(_addrs.collateral, walletAddress);
+        window.__tUSDCBalance = _bal;
+        const _payRaw = (qtyRaw * sidePrice) / ONE_6;
+        if(_bal < _payRaw){
+          els.execStatus.textContent = `Insufficient tUSDC: need ~${(Number(_payRaw)/1e6).toFixed(2)} but have ${(Number(_bal)/1e6).toFixed(2)} — use the faucet button, then retry`;
+          els.execStatus.className = "alert alert-risk";
+          _resetSubmit(); try{ renderPolicyGate(); }catch{}
+          return;
+        }
+      }
+    }catch(_balErr){ /* RPC blip: proceed — the pool reverts InsufficientBalance honestly on-chain rather than us guessing */ }
     const expireNs = BigInt(Math.floor(Date.now()/1000 + 120)*1e9);
     const marketExpiryNs = BigInt(expirySec)*1_000_000_000n;
     const finalExpiry = expireNs < marketExpiryNs - 10_000_000_000n ? expireNs : marketExpiryNs - 10_000_000_000n;
 
-    els.execStatus.textContent = `Signing IOC ${side} price ${(Number(yesPriceRaw)/1e6).toFixed(3)} qty ${(Number(qtyRaw)/1e6).toFixed(3)}…`;
+    els.execStatus.textContent = `Signing IOC ${side} price ${(Number(yesPriceRaw)/1e6).toFixed(3)} qty ${(Number(qtyRaw)/1e6).toFixed(3)}… (first trade may ask a one-time token approval first)`;
     // Need trader via walletClient — SDK expects client.createTrader({ walletClient })
     // Import dynamically to avoid circular
     const trader = ex.client.createTrader({ walletClient });
@@ -787,7 +881,7 @@ async function execute(side){
       expireTimestampNs: finalExpiry,
     });
     const receipt = res.receipt || res;
-    const hash = receipt.transactionHash || res.transactionHash || "unknown";
+    const hash = receipt.transactionHash || res.transactionHash || res.hash || "unknown";
     const status = receipt.status || res.status;
     if (status==="reverted" || status===0 || status==="0x0"){
       els.execStatus.textContent=`Reverted: ${hash} — ${receipt.error || "unknown"}`;
@@ -798,7 +892,24 @@ async function execute(side){
     els.execStatus.innerHTML = `<span class="code">CONFIRMED · ${status}</span> Sent — <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${hash}" target="_blank" rel="noopener">${shortHash(hash)} ↗</a>`;
     els.execStatus.className="alert alert-success";
     // refresh
-    window.__lastAttemptHash = receipt.transactionHash || res.transactionHash || "";
+    window.__lastAttemptHash = receipt.transactionHash || res.transactionHash || res.hash || "";
+    // Actual fill is known IMMEDIATELY: IOC fills ride in the placeOrder result
+    // (PlaceOrderResult.fills[].fillPrice, YES terms) — no 3s faith gap.
+    // getUserFills refresh below stays as independent reconciliation.
+    const _bign = (v)=>{ try{ return BigInt(v); }catch{ try{ return BigInt(String(v).replace(/n$/, "")); }catch{ return 0n; } } };
+    let _actualTxt = "no fill — fully cancelled, nothing paid";
+    try{
+      const _fills = Array.isArray(res.fills) ? res.fills : [];
+      let _q = 0n, _not = 0n;
+      for(const _f of _fills){ const _qq = _bign(_f.quantityFilled ?? 0); _q += _qq; _not += _qq * _bign(_f.fillPrice ?? 0); }
+      if(_q > 0n){
+        const _avgYes = Number(_not / _q) / 1e6;
+        _actualTxt = side === "BUY_NO"
+          ? `${_avgYes.toFixed(3)} YES-equiv (${(1 - _avgYes).toFixed(3)} NO)`
+          : _avgYes.toFixed(3);
+        window.__lastFillPrice = _avgYes.toFixed(3);
+      } else { window.__lastFillPrice = undefined; }
+    }catch{ window.__lastFillPrice = undefined; }
     console.log(`[${tradeAttemptId}] CONFIRMED hash ${window.__lastAttemptHash} quoted ${(Number(yesPriceRaw)/1e6).toFixed(3)} vs actual will be verified via fill`);
     // Trade receipt — progressive disclosure: default completed, View proof expands
     try{
@@ -815,7 +926,7 @@ async function execute(side){
           `<div class="prow"><span class="k">Market / pool</span><span class="v">${mktShort(selected.marketId)} / ${selected.pool.slice(0,10)}…</span></div>` +
           `<div class="prow"><span class="k">Side / qty</span><span class="v">${side} · ${(Number(qtyRaw)/1e6).toFixed(3)}</span></div>` +
           `<div class="prow"><span class="k">Quoted</span><span class="v">${(Number(yesPriceRaw)/1e6).toFixed(3)}</span></div>` +
-          `<div class="prow"><span class="k">Actual</span><span class="v">awaiting fill (~3s via getUserFills)</span></div>` +
+           `<div class="prow"><span class="k">Actual fill</span><span class="v">${_actualTxt} · ${Array.isArray(res.fills) ? res.fills.length : 0} fill leg${Array.isArray(res.fills) && res.fills.length === 1 ? "" : "s"} in-tx</span></div>` +
           `<div class="prow"><span class="k">Max loss / expiry</span><span class="v">${maxLossDisplay} · ${expiryDisplay} UTC</span></div>` +
           `<div class="prow"><span class="k">Policy at execution</span><span class="v">${policyChecks.map(function(c){return c.code}).join(" · ")}</span></div>` +
           `<div class="prow"><span class="k">Wallet</span><span class="v">${walletAddress.slice(0,10)}…</span></div>` +
@@ -901,7 +1012,7 @@ if(els.faucetBtn) els.faucetBtn.onclick = async()=>{
     const trader = ex.client.createTrader({ walletClient });
     const res = await trader.faucet();
     const receipt = res.receipt || res;
-    const hash = receipt.transactionHash || res.transactionHash || "unknown";
+    const hash = receipt.transactionHash || res.transactionHash || res.hash || "unknown";
     if(els.faucetStatus) els.faucetStatus.innerHTML = `Sent — <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${hash}" target="_blank" rel="noopener">${hash.slice(0,10)}… ↗</a>`;
     try{
       const sdk0 = await loadSdk();
@@ -928,6 +1039,30 @@ function renderSettlementScan(rows){
   }).join("");
 }
 
+// On-chain claimable scan (indexer-down fallback): winner-with-balance or
+// voided-with-balance per known market. Same entry shape as getClaimable
+// ({marketId, pool, outcomeIdx, amount, estPayout, status}).
+async function scanClaimableOnchain(ex, marketIds){
+  const out = [];
+  await Promise.all((marketIds || []).map(async (id)=>{
+    try{
+      const oc = await ex.client.getMarketOnchain(id);
+      const ot = oc.outcomeToken;
+      if(!ot || oc.yesId === undefined || oc.noId === undefined) return;
+      const y = await ex.client.getOutcomeBalance({ outcomeToken: ot, account: walletAddress, id: BigInt(oc.yesId) }).catch(()=>0n);
+      const n = await ex.client.getOutcomeBalance({ outcomeToken: ot, account: walletAddress, id: BigInt(oc.noId) }).catch(()=>0n);
+      if(oc.isVoided || Number(oc.status) === 5){
+        if(y > 0n) out.push({ marketId: id, pool: oc.pool, outcomeIdx: 0, amount: y, estPayout: y / 2n, status: "Voided" });
+        if(n > 0n) out.push({ marketId: id, pool: oc.pool, outcomeIdx: 1, amount: n, estPayout: n / 2n, status: "Voided" });
+      } else if(oc.isResolved && (oc.winningOutcome === 0 || oc.winningOutcome === 1)){
+        const held = oc.winningOutcome === 0 ? y : n;
+        if(held > 0n) out.push({ marketId: id, pool: oc.pool, outcomeIdx: oc.winningOutcome, amount: held, estPayout: held, status: "Resolved" });
+      }
+    }catch{}
+  }));
+  return out;
+}
+
 els.redeemAll.onclick = async()=>{
   if(!walletAddress || !walletClient) return alert("Connect wallet first");
   let ex;
@@ -937,7 +1072,18 @@ els.redeemAll.onclick = async()=>{
   els.execStatus.textContent="Scanning claimable positions (settled winners + voids)…";
   els.execStatus.className="alert";
   try{
-    const scanned = await ex.client.getClaimable(walletAddress);
+    let scanned = null, viaFallback = false;
+    try{
+      scanned = await withTimeout(ex.client.getClaimable(walletAddress), 15000, "Claimable scan");
+    }catch(scanErr){
+      if(!isIndexerError(scanErr)) throw scanErr;
+      // Indexer down: verify fully on-chain over known markets (fills + cache).
+      els.execStatus.textContent = "Indexer down — verifying claimables fully on-chain…";
+      restoreCache();
+      const ids = [...new Set(fillsCache.map(f=>f.market).filter(Boolean))].slice(0,10);
+      scanned = await scanClaimableOnchain(ex, ids);
+      viaFallback = true;
+    }
     const rows = (Array.isArray(scanned) ? scanned : []).filter(c=>{ try{ return BigInt(c.amount) > 0n && (c.outcomeIdx === 0 || c.outcomeIdx === 1); }catch{ return false; } });
     renderSettlementScan(rows);
     if(!rows.length){
@@ -947,13 +1093,13 @@ els.redeemAll.onclick = async()=>{
     }
     let totalEst = 0n;
     for(const c of rows){ try{ totalEst += BigInt(c.estPayout ?? c.amount); }catch{} }
-    els.execStatus.textContent=`Claiming ${rows.length} position${rows.length>1?"s":""} (~${(Number(totalEst)/1e6).toFixed(3)} tUSDC) in ONE transaction — sign in wallet…`;
+    els.execStatus.textContent=`Claiming ${rows.length} position${rows.length>1?"s":""} (~${(Number(totalEst)/1e6).toFixed(3)} tUSDC) in ONE transaction — sign in wallet…${viaFallback ? " (verified fully on-chain — indexer down)" : ""}`;
     els.execStatus.className="alert";
     const entries = rows.map(c=>({ marketId: c.marketId, outcomeIdx: c.outcomeIdx, amount: BigInt(c.amount) }));
     const trader = ex.client.createTrader({ walletClient });
     const res = await trader.redeemMany({ entries });
     const receipt = res.receipt || res;
-    const hash = receipt.transactionHash || res.transactionHash || "unknown";
+    const hash = receipt.transactionHash || res.transactionHash || res.hash || "unknown";
     // Demote redeemed CLAIMABLE rows to WON/VOID on next refresh (losers were never CLAIMABLE).
     try{
       window.__redeemedKeys = window.__redeemedKeys || new Set();
