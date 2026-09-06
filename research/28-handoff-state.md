@@ -209,3 +209,8 @@ If interrupted, verify: `npm run validate` then `npm run validate:write` (should
 - Gate 6 PASS (read-only): 3 claimables live on funded wallet — DO NOT redeem off-camera; save for demo.
 - Suite 29/29, validate 1-4+6 PASS, build OK. Tree: backend files + `.gitignore` (*.mp4, test-results/) + frontend checkpoint commit pending merge to `main`.
 - Frontend session: port the two snippets in 61 into `app.js` (`redeemAll` → real redeem; `renderPositions` → resolver + `getOutcomeBalance`×2). Receipt share-card still open (P1).
+
+## Full-E2E addendum (2026-09-06 evening — DONE, all branches merged, on `main`)
+- Frontend wiring complete: real redeem, enriched ledger, live policy gate, 4h/1d, copy-proof. Verification: 29/29 unit, 5/5 Playwright (during outage), shipped-resolver 6/6, gate DOM ○+Check. See IMPLEMENTATION-STATUS.
+- Indexer 504 outage at verify time — app degrades honestly (proven in-test). Re-run `npm run validate` when green before demo recording.
+- Human tail unchanged: popup UP/DOWN hashes (incl. one REDEEMED tx — 3 claimables waiting) → video → public flip → BUIDL before Sep 8 12:00 UTC.

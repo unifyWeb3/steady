@@ -133,3 +133,11 @@ npm run validate   # re-verify reads before UI work
 - Harness **Gate 6** NEW (`getClaimable` read-only): PASS 2026-09-06 — 3 real claimables on funded wallet (2005000000/1243000/1000 raw, Finalized), deliberately NOT redeemed (demo camera).
 - Tests **29/29 PASS** (was 13): +10 positionState, +6 redemption shapers. `npm run validate` gates 1-4 + 6 PASS; `npm run build` OK (dist 96K).
 - New windows observed live: 4h/1d/45d BTC/ETH — filters unchanged (frontend call).
+
+## Full-E2E wiring (2026-09-06 evening, `app/` — all branches merged to `main`)
+- `redeemAll` is now a REAL close-out: `getClaimable` scan → `redeemMany` ONE tx via `walletClient` popup → receipt + `__redeemedKeys` demotion → ledger refresh. Empty scan = honest empty, never throws.
+- Positions ledger state-enriched: `resolvePositionState` (verbatim port of `lib/steady/positionState.ts`, 6/6 vectors PASS against shipped `app.js`) fed by `getMarketOnchain` + 2× `getOutcomeBalance` per market (≤8 markets, all guarded). All 6 tabs now live.
+- Policy gate reports live: ✓/✗/○ per check + `Authorized/Blocked/Check` badge (default `Check`, not green). Fixed boot bug where badge stayed `Authorized` with zero data.
+- Discovery extended to 4h/1d (live per Gate 2); receipt has `Copy proof` text+link share.
+- Verified: unit 29/29, build OK, Playwright 5/5 (during indexer 504 outage — honest-degradation path proven: shell usable, Retry, 0 overflow, no pageerrors), shipped-resolver 6/6, gate DOM check (○+Check, no errors).
+- Indexer 504 outage ongoing at verification time (3× Gate 2 fails) — last full live PASS earlier today (gates 1-4 + 6, 3 claimables). No code path changed since; browser popup redeem still needs the human click (user manual check).

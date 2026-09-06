@@ -53,7 +53,7 @@
           <h2 class="h2">Live Windows</h2>
           <button id="refreshBtn" class="btn btn-secondary btn-sm">Refresh</button>
         </div>
-        <div class="caption panel-sub">BTC / ETH · 1m / 5m / 15m / 1h · Trading status 1 only · &gt;60s headroom</div>
+          <div class="caption panel-sub">BTC / ETH · 1m / 5m / 15m / 1h / 4h / 1d · Trading status 1 only · &gt;60s headroom</div>
         <div class="tablewrap">
           <table class="table" id="marketTable">
             <thead>
@@ -172,15 +172,15 @@
           <div id="policyGate" class="policy-box" aria-label="Policy control gate">
             <div class="policy-head">
               <span class="ticket-field-label" style="font-weight:700">Policy Control Gate</span>
-              <span id="policyGateBadge" class="badge badge-up">Authorized</span>
+              <span id="policyGateBadge" class="badge">Check</span>
             </div>
             <div class="policy-list">
-              <div class="policy-item"><span class="check">✓</span> <span>Market Trading (1)</span></div>
-              <div class="policy-item"><span class="check">✓</span> <span>Headroom ≥ 60s</span></div>
-              <div class="policy-item"><span class="check">✓</span> <span>Book Liquidity</span></div>
-              <div class="policy-item"><span class="check">✓</span> <span>Spread &lt; 0.150</span></div>
-              <div class="policy-item"><span class="check">✓</span> <span>Discipline Clear</span></div>
-              <div class="policy-item"><span class="check">✓</span> <span>Balance Sufficient</span></div>
+              <div class="policy-item" id="pg-market"><span class="check">○</span> <span>Market Trading (1)</span></div>
+              <div class="policy-item" id="pg-headroom"><span class="check">○</span> <span>Headroom ≥ 60s</span></div>
+              <div class="policy-item" id="pg-liquidity"><span class="check">○</span> <span>Book Liquidity</span></div>
+              <div class="policy-item" id="pg-spread"><span class="check">○</span> <span>Spread &lt; 0.150</span></div>
+              <div class="policy-item" id="pg-discipline"><span class="check">○</span> <span>Discipline Clear</span></div>
+              <div class="policy-item" id="pg-balance"><span class="check">○</span> <span>Balance Sufficient</span></div>
             </div>
           </div>
 

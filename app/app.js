@@ -171,7 +171,7 @@ async function loadMarkets(){
       const intervalSec = Number(m.intervalSec||0);
       const expirySec = Number(m.expiry||0);
       if (!["BTC","ETH"].includes(asset)) continue;
-      if (![60,300,900,3600].includes(intervalSec)) continue;
+      if (![60,300,900,3600,14400,86400].includes(intervalSec)) continue;
       if (expirySec - now <= 60) continue;
       const pool = m.pool || m.poolAddress;
       if (!m.marketId || !pool) continue;
@@ -208,7 +208,7 @@ async function loadMarkets(){
         if (b.yesBids?.length && b.yesAsks?.length) spreadTxt = ((Number(bestAsk)-Number(bestBid))/1e6).toFixed(3);
       }catch{}
       const cd = fmtCountdown(m.expirySec);
-      const label = m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h";
+      const label = m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":m.intervalSec===3600?"1h":m.intervalSec===14400?"4h":m.intervalSec===86400?"1d":`${m.intervalSec}s`;
       const tr = document.createElement("tr");
       tr.className="row";
       tr.dataset.marketId = m.marketId;
@@ -227,7 +227,7 @@ async function loadMarkets(){
     // Never leave the ticket in its dead CTA state when live windows exist:
     // preselect the soonest-expiring window (read-only book fetch, no order path).
     if (!selected && display.length) selectMarket(display[0]);
-    setStatus(`Live: ${display.length} Trading windows with >60s headroom (BTC/ETH 1m/5m/15m/1h)`, "success");
+    setStatus(`Live: ${display.length} Trading windows with >60s headroom (BTC/ETH 1m/5m/15m/1h/4h/1d)`, "success");
   }catch(e){
     clearTimeout(timeout);
     const msg = e.message||String(e);
@@ -249,7 +249,7 @@ async function loadMarkets(){
 
 async function selectMarket(m){
   selected = m;
-  els.ticketMarket.textContent = `${m.asset} ${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":"1h"} · expiry ${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC · ${mktShort(m.marketId)} · pool ${m.pool.slice(0,10)}…`;
+  els.ticketMarket.textContent = `${m.asset} ${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":m.intervalSec===3600?"1h":m.intervalSec===14400?"4h":m.intervalSec===86400?"1d":`${m.intervalSec}s`} · expiry ${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC · ${mktShort(m.marketId)} · pool ${m.pool.slice(0,10)}…`;
   els.ticketMarket.title = m.marketId;
   document.querySelectorAll("#marketTbody tr.row").forEach(tr=>{
     tr.classList.toggle("selected", tr.dataset.marketId === m.marketId);
@@ -322,6 +322,7 @@ function updatePreview(){
       els.previewPay.textContent="—"; els.previewWin.textContent="—";
       els.previewExpiry.textContent="—"; els.previewBook.textContent="—";
     }
+    try{ renderPolicyGate(); }catch{}
     return;
   }
   // show both sides preview for current maxLoss; labels map UP=YES outcome, DOWN=NO outcome
@@ -353,6 +354,46 @@ function updatePreview(){
   } else {
     els.previewCapped.textContent = "Trade policy for this ticket: PASS (market Trading, headroom, spread, size checked at execution).";
     if (els.previewCappedRow) els.previewCappedRow.style.display = "flex";
+  }
+  try{ renderPolicyGate(); }catch{}
+}
+
+// Policy gate — live per-check states (the gate reports, never decorates).
+// ✓ pass · ✗ fail + reason in title · ○ unknown (not enough data yet — honest, not green).
+function renderPolicyGate(){
+  const set = (id, pass, reason)=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const box = el.querySelector(".check");
+    if(box) box.textContent = pass === true ? "✓" : pass === false ? "✗" : "○";
+    el.classList.toggle("policy-fail", pass === false);
+    el.title = reason || "";
+  };
+  const now = Math.floor(Date.now()/1000);
+  set("pg-market", selected ? true : null, selected ? `Selected ${selected.asset} ${String(selected.marketId).slice(0,10)}… (Trading re-verified at execution)` : "Pick a live window");
+  const head = selected ? (selected.expirySec - now) : null;
+  set("pg-headroom", head === null ? null : head >= 60, head === null ? "Pick a live window" : head >= 60 ? `${Math.floor(head/60)}m ${head%60}s to lock` : `Locks in ${head}s — pick the next window`);
+  const hasBook = !!(book && ((book.yesAsks && book.yesAsks.length) || (book.yesBids && book.yesBids.length)));
+  set("pg-liquidity", !book ? null : hasBook, !book ? "Book loading…" : hasBook ? "Live book present" : "Empty book — try the next window");
+  let spread = null;
+  if (book?.yesBids?.[0]?.price !== undefined && book?.yesAsks?.[0]?.price !== undefined) {
+    try{ spread = (Number(book.yesAsks[0].price) - Number(book.yesBids[0].price)) / 1e6; }catch{}
+  }
+  set("pg-spread", spread === null ? null : spread <= 0.15, spread === null ? "Book loading…" : `Spread ${spread.toFixed(3)}${spread > 0.15 ? " — execution will refuse (SPREAD_TOO_WIDE)" : ""}`);
+  const settled = (window.__lastSettledCalls || []).filter(c=>!c.void);
+  let streak = 0;
+  for(let i=settled.length-1;i>=0;i--){ if(!settled[i].won) streak++; else break; }
+  const cooling = !!(cooldownUntil && cooldownUntil > Date.now());
+  set("pg-discipline", cooling ? false : true, cooling ? `${streak} consecutive losses — cooldown active` : streak ? `${streak} straight loss${streak>1?"es":""} (2 in a row blocks)` : "No loss streak");
+  const bal = window.__tUSDCBalance;
+  set("pg-balance", !walletAddress ? null : (bal === undefined ? null : bal > 0n), !walletAddress ? "Connect wallet" : bal === undefined ? "Reading balance…" : bal > 0n ? `${(Number(bal)/1e6).toFixed(2)} tUSDC` : "Empty — use the faucet button");
+  const badge = document.getElementById("policyGateBadge");
+  if(badge){
+    const mark = (id)=>document.getElementById(id)?.querySelector(".check")?.textContent;
+    const ids = ["pg-market","pg-headroom","pg-liquidity","pg-spread","pg-discipline","pg-balance"];
+    if(cooling || ids.some(id=>mark(id)==="✗")){ badge.textContent = "Blocked"; badge.className = "badge badge-down"; }
+    else if(ids.some(id=>mark(id)==="○")){ badge.textContent = "Check"; badge.className = "badge"; }
+    else { badge.textContent = "Authorized"; badge.className = "badge"; badge.classList.add("badge-up"); }
   }
 }
 
@@ -406,6 +447,28 @@ async function connect(){
 }
 
 // Fills + scoring + discipline
+// Position state — vanilla port of lib/steady/positionState.ts (pure, no SDK).
+// Emits ONLY tab-compatible states: LIVE|SETTLING|CLAIMABLE|WON|LOST|VOID.
+function resolvePositionState(p){
+  const yesBal = p.yesBalanceRaw ?? 0n;
+  const noBal = p.noBalanceRaw ?? 0n;
+  const isYes = /YES/.test(`${p.takerSide ?? ""}${p.side ?? ""}`);
+  const held = isYes ? yesBal : noBal;
+  const voided = p.isVoided === true || p.status === 5;
+  const settledResolved = p.isResolved === true || p.status === 4;
+  const outcomeKnown = p.winningOutcome === 0 || p.winningOutcome === 1;
+  let state;
+  if (voided) state = (yesBal > 0n || noBal > 0n) ? "CLAIMABLE" : "VOID";
+  else if (settledResolved && !outcomeKnown) state = "SETTLING"; // resolved but snapshot unread — never guess
+  else if (settledResolved) state = ((p.winningOutcome === 0) === isYes) ? (held > 0n ? "CLAIMABLE" : "WON") : "LOST";
+  else if (p.status === 2 || p.status === 3) state = "SETTLING";
+  else if (p.status === 0 || p.status === 1) state = "LIVE";
+  else if (p.expirySec && p.nowSec && p.nowSec > p.expirySec) state = "SETTLING";
+  else state = "LIVE";
+  if (p.redeemed === true && state === "CLAIMABLE") state = voided ? "VOID" : "WON";
+  return state;
+}
+
 async function refreshFills(){
   if(!walletAddress) return;
   let ex;
@@ -414,26 +477,60 @@ async function refreshFills(){
   try{
     const fills = await ex.client.getUserFills(walletAddress, { since: 0, limit: 50 });
     fillsCache = fills;
+    await resolveFillStates(ex); // onchain status + ERC-6909 balances, bounded + best-effort
     renderPositions();
     renderScore();
     renderDiscipline();
   }catch(e){ console.error(e); }
 }
 
+// Bounded enrichment: unique markets only (≤8), every read guarded — one revert
+// never breaks the ledger; unresolved rows keep the honest expiry fallback.
+async function resolveFillStates(ex){
+  const now = Math.floor(Date.now()/1000);
+  const ids = [...new Set(fillsCache.map(f=>f.market).filter(Boolean))].slice(0,8);
+  const ocByMarket = {};
+  await Promise.all(ids.map(async (id)=>{
+    try{
+      const oc = await ex.client.getMarketOnchain(id);
+      let yes = 0n, no = 0n;
+      try{
+        const ot = oc.outcomeToken;
+        if (ot && oc.yesId !== undefined && oc.yesId !== null) yes = BigInt(await ex.client.getOutcomeBalance({ outcomeToken: ot, account: walletAddress, id: BigInt(oc.yesId) }));
+        if (ot && oc.noId !== undefined && oc.noId !== null) no = BigInt(await ex.client.getOutcomeBalance({ outcomeToken: ot, account: walletAddress, id: BigInt(oc.noId) }));
+      }catch{}
+      ocByMarket[id] = { ...oc, _yes: yes, _no: no };
+    }catch{}
+  }));
+  const redeemed = window.__redeemedKeys || new Set();
+  fillsCache = fillsCache.map(f=>{
+    const oc = ocByMarket[f.market] || {};
+    const m = marketsCache.find(x=>x.marketId===f.market);
+    const expiry = m?.expirySec || (oc.expiry ? Number(oc.expiry) : 0);
+    const status = (oc.status === undefined || oc.status === null) ? null : Number(oc.status);
+    const win = (oc.winningOutcome === 0 || oc.winningOutcome === 1) ? oc.winningOutcome : ((Number(oc.winningOutcome) === 0 || Number(oc.winningOutcome) === 1) ? Number(oc.winningOutcome) : null);
+    const state = resolvePositionState({
+      takerSide: f.takerSide, side: f.side, status,
+      isResolved: oc.isResolved === true, isVoided: oc.isVoided === true,
+      winningOutcome: win,
+      yesBalanceRaw: oc._yes ?? 0n, noBalanceRaw: oc._no ?? 0n,
+      expirySec: expiry, nowSec: now,
+      redeemed: redeemed.has(`${f.market}:${f.takerSide || f.side || ""}`),
+    });
+    return { ...f, _state: state, _expiry: expiry };
+  });
+}
+
 function renderPositions(){
   const tbody = els.posTbody;
   const tab = document.querySelector(".tab.active")?.dataset.tab || "ALL";
-  // simple: show fills as positions (real lifecycle needs getMarketOnchain per fill + balances)
-  // For MVP, map fills to LIVE/SETTLING/CLAIMABLE via expiry check
+  // Rows arrive state-enriched from resolveFillStates (onchain + ERC-6909 truth).
+  // Guard keeps manually-rendered rows honest if enrichment hasn't run yet.
   const now = Math.floor(Date.now()/1000);
   let rows = fillsCache.map(f=>{
-    const marketId = f.market;
-    const m = marketsCache.find(x=>x.marketId===marketId);
-    const expiry = m?.expirySec || 0;
-    let state = "LIVE";
-    if (expiry && now > expiry) state = "SETTLING";
-    // We don't yet fetch Finalized claimable — show as SETTLING
-    return { ...f, _state: state, _expiry: expiry };
+    if (f._state) return f;
+    const expiry = f._expiry || 0;
+    return { ...f, _state: (expiry && now > expiry) ? "SETTLING" : "LIVE", _expiry: expiry };
   });
   if (tab!=="ALL") rows = rows.filter(r=>r._state===tab);
   if (rows.length===0){
@@ -449,7 +546,7 @@ function renderPositions(){
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(f);
   }
-  const intervalLabel = (s)=> s===60?"1m":s===300?"5m":s===900?"15m":s===3600?"1h":(s?`${s}s`:"");
+  const intervalLabel = (s)=> s===60?"1m":s===300?"5m":s===900?"15m":s===3600?"1h":s===14400?"4h":s===86400?"1d":(s?`${s}s`:"");
   for (const [marketId, fills] of groups) {
     const m = marketsCache.find(x=>x.marketId===marketId);
     const gLabel = m
@@ -587,6 +684,7 @@ function renderDiscipline(calls){
       els.buyYes.title=""; els.buyNo.title="";
     }
   }
+  try{ renderPolicyGate(); }catch{}
   return streak;
 }
 window.__lastSettledCalls = [];
@@ -711,7 +809,7 @@ async function execute(side){
         const expiryDisplay = new Date(Number(finalExpiry/1000000000n)*1000).toISOString().slice(11,19);
         const orderIdDisplay = (res && res.orderId) || (receipt && receipt.orderId) || "—";
         recEl.innerHTML =
-          `<div class="receipt-head"><span class="caption">Trade completed — ${tradeAttemptId}</span><span class="badge badge-up">Mined</span></div>` +
+           `<div class="receipt-head"><span class="caption">Trade completed — ${tradeAttemptId}</span><span style="display:flex;gap:8px;align-items:center"><span class="badge badge-up">Mined</span><button class="btn btn-secondary btn-sm" id="copyProofBtn" type="button">Copy proof</button></span></div>` +
           `<div style="padding:10px 12px;font-size:13px">${side.replace("BUY_","")} ${(Number(qtyRaw)/1e6).toFixed(3)} contracts · max loss ${maxLossDisplay} tUSDC · <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}" target="_blank" rel="noopener">${shortHash(window.__lastAttemptHash)} ↗</a></div>` +
           `<details><summary>View proof <span class="caption">quoted · actual · policy · fill</span></summary><div class="proof">` +
           `<div class="prow"><span class="k">Market / pool</span><span class="v">${mktShort(selected.marketId)} / ${selected.pool.slice(0,10)}…</span></div>` +
@@ -723,7 +821,18 @@ async function execute(side){
           `<div class="prow"><span class="k">Wallet</span><span class="v">${walletAddress.slice(0,10)}…</span></div>` +
           `<div class="prow"><span class="k">Tx</span><span class="v"><a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}" target="_blank" rel="noopener">${shortHash(window.__lastAttemptHash)} ↗</a></span></div>` +
           `<div class="prow"><span class="k">Order</span><span class="v">${String(orderIdDisplay).slice(0,18)}</span></div>` +
-          `</div></details>`;
+           `</div></details>`;
+        // Shareable proof: text+link (no gamification) — the receipt travels.
+        try{
+          const cp = document.getElementById("copyProofBtn");
+          if(cp) cp.onclick = async()=>{
+            const actualRow = (window.__lastFillPrice !== undefined) ? ` → fill ${window.__lastFillPrice}` : " → fill pending (~3s)";
+            const txt = `Steady receipt: ${side.replace("BUY_","")} ${(Number(qtyRaw)/1e6).toFixed(3)} contracts · quoted ${(Number(yesPriceRaw)/1e6).toFixed(3)}${actualRow} · max loss ${maxLossDisplay} tUSDC · tx https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}`;
+            try{ await navigator.clipboard.writeText(txt); cp.textContent = "Copied ✓"; }
+            catch{ cp.textContent = "Copy blocked"; }
+            setTimeout(()=>{ cp.textContent = "Copy proof"; }, 2500);
+          };
+        }catch{}
       }
     }catch(e){}
     setTimeout(()=>{ refreshFills(); window.__submitting=false; els.buyYes.disabled=false; els.buyNo.disabled=false; }, 3000);
@@ -805,28 +914,62 @@ if(els.faucetBtn) els.faucetBtn.onclick = async()=>{
     if(els.faucetStatus) els.faucetStatus.textContent = `Faucet failed: ${(e.message||String(e)).slice(0,120)}`;
   }finally{ els.faucetBtn.disabled = false; }
 };
+// Audit strip: renders a claimable scan (SDK ClaimablePosition rows) or the honest empty.
+function renderSettlementScan(rows){
+  if(!rows || !rows.length){
+    els.settlementList.innerHTML = `<div class="empty empty-slim"><div class="title">No claimable winnings</div><div class="body">Settled winners appear here with one-click redeem — void pays 0.5 per side.</div></div>`;
+    return;
+  }
+  els.settlementList.innerHTML = rows.slice(0,8).map(c=>{
+    let amt = "—", est = "—";
+    try{ amt = (Number(BigInt(c.amount))/1e6).toFixed(3); }catch{}
+    try{ est = (Number(BigInt(c.estPayout ?? c.amount))/1e6).toFixed(3); }catch{}
+    return `<div class="settle-row"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="mono rowmain">${mktShort(c.marketId)} · ${c.outcomeIdx===0?"YES":"NO"} · ${amt}</span><span class="badge badge-solid">${c.status || "Settled"}</span></div><div class="caption">est payout ~${est} tUSDC · pool ${String(c.pool||"").slice(0,10)}…</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="hashlink" href="https://shannon-explorer.somnia.network/" target="_blank" rel="noopener">Explorer ↗</a></div></div>`;
+  }).join("");
+}
+
 els.redeemAll.onclick = async()=>{
-  if(!walletAddress) return alert("Connect first");
+  if(!walletAddress || !walletClient) return alert("Connect wallet first");
   let ex;
   try{ ex = await getExchange(); }
   catch(e){ els.execStatus.style.display="block"; els.execStatus.textContent=`SDK unavailable: ${e.message}`; els.execStatus.className="alert alert-risk"; return; }
   els.execStatus.style.display="block";
-  els.execStatus.textContent="Scanning claimable (Finalized)…";
+  els.execStatus.textContent="Scanning claimable positions (settled winners + voids)…";
+  els.execStatus.className="alert";
   try{
-    const past = await ex.client.listPastBinaryMarkets({ status:"Finalized", limit:20 });
-    els.execStatus.textContent = `Found ${past.length} Finalized — checking balances… (see console)`;
+    const scanned = await ex.client.getClaimable(walletAddress);
+    const rows = (Array.isArray(scanned) ? scanned : []).filter(c=>{ try{ return BigInt(c.amount) > 0n && (c.outcomeIdx === 0 || c.outcomeIdx === 1); }catch{ return false; } });
+    renderSettlementScan(rows);
+    if(!rows.length){
+      els.execStatus.textContent="Nothing claimable — no stranded winnings. Settle a win first, then redeem here.";
+      els.execStatus.className="alert alert-success";
+      return;
+    }
+    let totalEst = 0n;
+    for(const c of rows){ try{ totalEst += BigInt(c.estPayout ?? c.amount); }catch{} }
+    els.execStatus.textContent=`Claiming ${rows.length} position${rows.length>1?"s":""} (~${(Number(totalEst)/1e6).toFixed(3)} tUSDC) in ONE transaction — sign in wallet…`;
+    els.execStatus.className="alert";
+    const entries = rows.map(c=>({ marketId: c.marketId, outcomeIdx: c.outcomeIdx, amount: BigInt(c.amount) }));
+    const trader = ex.client.createTrader({ walletClient });
+    const res = await trader.redeemMany({ entries });
+    const receipt = res.receipt || res;
+    const hash = receipt.transactionHash || res.transactionHash || "unknown";
+    // Demote redeemed CLAIMABLE rows to WON/VOID on next refresh (losers were never CLAIMABLE).
+    try{
+      window.__redeemedKeys = window.__redeemedKeys || new Set();
+      for(const e of entries){ window.__redeemedKeys.add(`${e.marketId}:BUY_YES`); window.__redeemedKeys.add(`${e.marketId}:BUY_NO`); }
+    }catch{}
+    els.execStatus.innerHTML = `<span class="code">REDEEMED · ${receipt.status || "mined"}</span> <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${hash}" target="_blank" rel="noopener">${shortHash(hash)} ↗</a> — ledger refreshes in ~3s`;
     els.execStatus.className="alert alert-success";
-    console.log(past.slice(0,3));
-    // Redemption requires per-market trader.redeem — not auto without outcome check
-    els.settlementList.innerHTML = past.slice(0,5).map(m=>`<div class="settle-row"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="mono rowmain">${mktShort(m.marketId)} · ${m.asset} ${m.intervalSec}s</span><span class="badge badge-void">Finalized</span></div><div class="caption">pool ${m.pool?.slice(0,10)}… · expiry ${m.expiry}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="hashlink" href="https://prd.oracle.somnia.host/questions/${m.oracleQuestionId||""}?view=graph" target="_blank" rel="noopener">Oracle graph →</a><a class="hashlink" href="https://shannon-explorer.somnia.network/" target="_blank" rel="noopener">Explorer ↗</a></div></div>`).join("") || `<div class="empty"><div class="title">No Finalized markets found</div><div class="body">Winnings appear here after settlement — void pays 0.5 per side.</div></div>`;
-  }catch(e){ els.execStatus.innerHTML=`<span class="code">REDEEM_SCAN_FAILED</span> Redeem scan failed: ${e.message}`; els.execStatus.className="alert alert-risk"; }
+    setTimeout(()=>{ refreshFills(); }, 3000);
+  }catch(e){ els.execStatus.innerHTML=`<span class="code">REDEEM_FAILED</span> Redeem failed: ${(e.message||String(e)).slice(0,200)}`; els.execStatus.className="alert alert-risk"; }
 };
 
 // Auto-load — shell renders first, data services attach after (decoupled)
 window.loadMarkets = loadMarkets;
 window.__steady = window.__steady || {};
 window.__steadyBootedAt = Date.now();
-loadMarkets().finally(()=>{ window.__steadyBooted = true; });
+loadMarkets().finally(()=>{ window.__steadyBooted = true; try{ renderPolicyGate(); }catch{} });
 setInterval(()=>{ if(document.visibilityState==="visible") loadMarkets(); }, 90_000); // discovery 60-120s per 32, not 30s
 setInterval(()=>{
   if(cooldownUntil && cooldownUntil > Date.now()){
