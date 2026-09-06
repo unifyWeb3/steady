@@ -18,3 +18,9 @@ Manual Buy UP (+DOWN) popup hash with screenshots; demo video; repo public; verc
 Deck, receipt localStorage persistence (48 gap), WS tail.
 ## D — DO NOT TOUCH
 Anything AI/social/token/gamified; SDK upgrade (0.29.0 current); backend/DB; custom contracts.
+
+## Addendum 2026-09-06 (release execution)
+- Production: https://somnia-snowy.vercel.app (also https://somnia-hhacr531b-oxunify.vercel.app) — deployed via vercel --prod, build 5s, static dist.
+- Prod smoke: homepage + terminal × desktop/mobile load with titles, ZERO console/page errors, no localhost refs, no secrets.
+- README now links production URL + demo placeholder + honest limitations. FEEDBACK.md filed (8 items). demo.md + demo-editing.md written.
+- Score update: Presentation 10→11 (prod live + proof screenshots; video still missing). Total honest: **74/100 → ~81** with video + manual E2E hash.

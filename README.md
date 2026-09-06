@@ -16,6 +16,12 @@ Steady is a consumer execution shell for live BTC/ETH Up/Down windows that makes
 
 Wallet: `0x0d6FAee78dFF4380E77D0e412F5Cddd942673719` (test burner).
 
+## Live demo
+
+**Production:** [https://somnia-snowy.vercel.app](https://somnia-snowy.vercel.app) (static, Shannon testnet, no backend, no secrets).
+
+Demo video: *(recording after human wallet E2E — see `demo.md` for the shot plan)*.
+
 ## Run it
 
 ```bash
@@ -46,5 +52,13 @@ No AI forecaster, no leaderboard, no vault/pooling, no token, no custom contract
 - `research/` — full audit trail (rules, protocol, scoring, control plane, brand, readiness).
 - `AGENTS.md` — contributor rules (testnet-only, no mocks, no secrets).
 - `memory.md` — operational continuation state.
+
+## Known limitations (honest)
+
+- Browser-popup signing is implemented (`createTrader({walletClient})`, same call proven via Node both directions) but the final human click-through is pending — see handoff.
+- Brier/Edge need ≥5 settled fills; below that the UI says so instead of inventing a score.
+- Cooldown needs 2 trailing real losses to fire; unit-tested, not yet observed live.
+- Indexer outages degrade to explicit error + Retry (never stale-as-live); market rows need a reachable indexer.
+- Mobile 375px verified (0 overflow); 390/768/1280 inspected in code, captures pending.
 
 Testnet only. Not financial advice.

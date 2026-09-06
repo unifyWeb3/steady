@@ -1,6 +1,6 @@
 # Implementation Status — Steady
 
-Last updated: 2026-09-05 — Penultimate audit: rules re-verified (Sep 8 18:00 UTC, $5k, 16 BUIDLs, no tracks); forensics re-PASS (4/4 txs success on-chain); 5/5 browser PASS; README+LICENSE added; debug logs gated + preview relabeled; popup signing + video + prod deploy remain
+Last updated: 2026-09-06 — RELEASE: prod https://somnia-snowy.vercel.app LIVE + smoke PASS (4 views, 0 errors); README+LICENSE+FEEDBACK+demo.md+demo-editing; honest 74/100; remaining: popup hash, video, public flip, BUIDL
 
 ## Current Phase
 **Phase 1 — Steady Live** — **Gates 1-5 Re-verified 2026-09-03, 13 unit tests PASS, app shell live :5173 (real SDK via esm.sh, warm paper, no purple glow), lib/dreamdex + lib/steady complete**

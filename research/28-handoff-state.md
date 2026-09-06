@@ -186,3 +186,10 @@ If interrupted, verify: `npm run validate` then `npm run validate:write` (should
 - Faucet P1 DONE: ticket has "Get 10k test tUSDC" button → `createTrader({walletClient}).faucet()` → hash + balance refresh; browser-verified rendering, no pageerror. Judge with empty wallet no longer dead-ends.
 - Human session brief: open terminal → Connect (Rabby/MetaMask, 50312 auto-switch) → faucet if tUSDC 0 → pick BTC/ETH 1h/4h window (>5m headroom) → max loss 2 → Buy UP → sign → capture hash → repeat Buy DOWN → wait lock → Finalized → Redeem → screenshots.
 - DO NOT claim: popup E2E, video, deploy, submission-ready.
+
+## Release execution (2026-09-06, branch frontend-reconstruction-v2)
+- Pre-deploy: unit 13/13 PASS; build OK (dist 92K). Gates 1-4: indexer 504 then timeout (transient outage, honest error path in app covers it); protocol unchanged since last PASS.
+- Deploy: `vercel --prod --yes` as oxunifyy → Production https://somnia-hhacr531b-oxunify.vercel.app, alias https://somnia-snowy.vercel.app (17s build).
+- Prod smoke (Playwright chromium, real prod URL): home+terminal × 1280/375 all load with correct titles, ZERO console/page errors, no localhost refs, no secrets. Screenshots test-results/prod-*.png.
+- Docs: README (prod URL + limitations), FEEDBACK.md (8 items), demo.md (10-shot plan), demo-editing.md. Faucet button live in ticket.
+- Human tail: popup E2E (UP+DOWN hashes) → video → public flip → BUIDL before Sep 8 12:00 UTC. Recommend 1h/4h windows at session time; verify via npm run validate first.
