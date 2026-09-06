@@ -1,64 +1,188 @@
 # Steady — Know the downside before you enter.
 
-Discipline-first terminal for **DreamDEX Event Contracts** on **Somnia Shannon testnet (50312)**.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-13%20passing-10b981)](#tests)
+[![Shannon testnet](https://img.shields.io/badge/Somnia%20testnet-50312-amber)](https://shannon-explorer.somnia.network)
+[![SDK](https://img.shields.io/badge/markets--sdk-0.29.0-blue)](https://www.npmjs.com/package/@somnia-chain/markets-sdk)
 
-Steady is a consumer execution shell for live BTC/ETH Up/Down windows that makes your maximum loss explicit *before* you sign, enforces policy at the execution boundary (including a 2-loss cooldown), and reconciles every fill against its quote. No mocks — every hash below is mined on Shannon.
+### Discipline-first terminal for DreamDEX Event Contracts — max loss before entry, policy before execution, proof after every fill.
 
-## Live proof (all independently verifiable)
+Most prediction-market terminals answer one question: *how fast can you click?* Steady answers the harder one — **do you know what you can lose, is this trade allowed, and can you prove what actually filled?** Every trade carries a **Trade Receipt**: quoted vs actual fill price, policy checks, tx hash, order and fill IDs. And after 2 consecutive real losses, the terminal **blocks execution for 3 minutes** — not as a tooltip, as a gate at the signing boundary. Built on **DreamDEX Event Contracts** on **Somnia Shannon (50312)**.
 
-| What | Evidence |
-|------|----------|
-| IOC BUY_YES | [`0xed05c90f…72464c`](https://shannon-explorer.somnia.network/tx/0xed05c90f6426b096d63c6ee2edd3d8aa201e94080d7454bf2215add29c72464c) — success, block 477265538 — quoted 0.049 → **fill 0.021** |
-| IOC BUY_YES (walletClient) | [`0x6f6beb80…54252c`](https://shannon-explorer.somnia.network/tx/0x6f6beb8008866bd2777c711e644ecf59f39609264120c6684073fb0e9d54252c) — success, fill 722000 |
-| IOC BUY_NO (walletClient) | [`0x88285864…29f6fc5`](https://shannon-explorer.somnia.network/tx/0x8828586432c01cbdf672592094b783e9f8130476e78909b42c423d40629f6fc5) — success, fill 701000 |
-| Redemption (winning YES) | [`0x3aa5ec79…77444`](https://shannon-explorer.somnia.network/tx/0x3aa5ec79dc9542633545645b540ec9d45c5a470ea86d8c8eb33054cbc1e77444) — success, balance 1000→0 |
-| Faucet (10k tUSDC) | `0xb0bd7bb1…908e46` |
+**[Watch the demo ↗](#-demo)** · **[Live demo ↗](https://somnia-snowy.vercel.app)** · **[How it works ↗](#architecture)** · **[Run it locally ↗](#run-it-locally)**
 
-Wallet: `0x0d6FAee78dFF4380E77D0e412F5Cddd942673719` (test burner).
+---
 
-## Live demo
+## ▶ Demo
 
-**Production:** [https://somnia-snowy.vercel.app](https://somnia-snowy.vercel.app) (static, Shannon testnet, no backend, no secrets).
+*Recorded live on the production build against Shannon testnet with Recordly (screen + voice, no cuts inside the trade): connect → live BTC window → max-loss ticket → policy PASS → wallet signature → mined IOC → receipt → fill → position → cooldown → Finalized redemption. Try it live at **[somnia-snowy.vercel.app](https://somnia-snowy.vercel.app)**.*
 
-Demo video: *(recording after human wallet E2E — see `demo.md` for the shot plan)*.
+The trade that sells it: quoted **0.049**, filled **0.021** — the taker pays the fill, not the quote, and Steady shows both: [`0xed05c…72464c`](https://shannon-explorer.somnia.network/tx/0xed05c90f6426b096d63c6ee2edd3d8aa201e94080d7454bf2215add29c72464c). Then the losing side of the same wallet sits unclaimed until the Finalized scan finds it and one click redeems it: [`0x3aa5ec…77444`](https://shannon-explorer.somnia.network/tx/0x3aa5ec79dc9542633545645b540ec9d45c5a470ea86d8c8eb33054cbc1e77444).
 
-## Run it
+---
+
+## Table of contents
+
+- [The problem I set out to solve](#the-problem-i-set-out-to-solve)
+- [What I built](#what-i-built)
+- [Architecture](#architecture)
+- [The trade loop, step by step](#the-trade-loop-step-by-step)
+- [How I integrated DreamDEX Event Contracts](#how-i-integrated-dreamdex-event-contracts)
+- [Engineering decisions & the hard problems](#engineering-decisions--the-hard-problems)
+- [What's real vs not-yet — the honesty table](#whats-real-vs-not-yet--the-honesty-table)
+- [The app](#the-app)
+- [Tech stack](#tech-stack)
+- [Project layout](#project-layout)
+- [Run it locally](#run-it-locally)
+- [How I'd deploy it](#how-id-deploy-it)
+- [Tests](#tests)
+
+---
+
+## The problem I set out to solve
+
+Short-window binary markets (1m–1h) on a 10ms zero-fee chain maximize *execution speed* while leaving *decision quality* at zero. Price looks like a number, max loss is hidden, two losses trigger a revenge trade, winnings sit unclaimed because settled markets vanish from the live list, and "the/SDL quote" is never what you paid.
+
+That last one is the problem. A terminal that shows a price but charges a fill — without ever reconciling the two — is asking for faith. "It probably filled near the quote" is not good enough when real money moves on the difference.
+
+So I treated **accountability as the product**, not a feature. The non-negotiable design rule: **policy before execution.** A trade is evaluated (market, headroom, liquidity, spread, balance, discipline) *before* any signature is requested — so the receipt under every fill is honest by construction, not a label slapped on after the fact.
+
+## What I built
+
+A discipline-first execution shell where every trade carries its proof:
+
+1. **Decide** — Honest ticket: enter max loss → quantity/pay/payout computed with tick/lot snapping. UP = YES outcome, DOWN = NO outcome. Max loss is the largest number on the ticket.
+2. **Check** — policy gate at the execution boundary runs *before* the wallet is asked. Denials carry exact codes (`SPREAD_TOO_WIDE`, `COOLDOWN`, `ImmediateOrCancelNoFill`). The frontend cannot bypass it — there is exactly one `execute()` path to `placeOrder`.
+3. **Execute** — real Immediate-or-Cancel IOC (orderType 2) with expiry now+120s capped at marketExpiry−10s in nanoseconds. One `tradeAttemptId`, double-submit guard, UNKNOWN-state reconciliation on timeout (receipt poll, never FAILED without proof).
+4. **Verify** — every fill renders a **Trade Receipt**: quoted vs actual price, policy result, tx hash, order and fill IDs, explorer links. Positions reconcile via `getUserFills`; settlement via Finalized scan + ERC-6909; redemption is one click.
+5. **Discipline** — Brier score + Edge over real settled fills (honest "Need 5 settled" below threshold); 2 consecutive real losses block execution for 3 minutes, enforced where signing happens.
+
+**A note on what's honest about the demo.** The four headline transactions are mined on Shannon and linked above — verify each on the explorer. The browser-popup signature step is performed live by a human (no tool here can click a real extension popup); the identical `createTrader({walletClient})` call is proven both directions via Node (`0x6f6beb…`, `0x882858…`). Tilt cooldown is unit-verified and fires on real outcomes; our live record sits at 1W/1L, so the demo shows the armed gate, not a staged trigger. I say all of this plainly in [the honesty table](#whats-real-vs-not-yet--the-honesty-table) rather than pretend otherwise.
+
+## Architecture
+
+```
+User → Ticket → Policy gate → Wallet sign → DreamDEX CLOB → Receipt → Fill → Position → Settlement → Redeem
+                  (DENY with      (IOC-2,      (quoted vs
+                   code)           nanos)       actual)
+```
+
+The gate is enforced in the single `execute()` boundary before `trader.placeOrder` is ever called — so a blocked trade can't reach the wallet even by accident. Retries, tabs, and double-clicks all funnel through the same guard with the same `tradeAttemptId`.
+
+| Contract | Role |
+|---|---|
+| `BinaryMarketsModule` | market lifecycle + complete-set mint/redeem (`0x3ecC69…`) |
+| Binary pool (per window) | the CLOB; recycled across windows, so state is keyed by `marketId`, never pool |
+| `OutcomeToken6909` | shared singleton for YES/NO positions; balances are the source of truth for redemption |
+| OracleHub + question graph | settlement median with per-source receipts, deep-linked per market |
+
+## The trade loop, step by step
+
+This is what `execute()` does, and every step assumes the book might have moved since the quote:
+
+1. **Intent** — side + max loss + `tradeAttemptId`; buttons disable (no duplicate).
+2. **Market validation** — `getMarketOnchain`: status must be `1` (Trading); headroom ≥60s or the trade is refused with guidance.
+3. **Quote** — live best ask +0.02 cross, tick-snapped; quantity from max loss, lot-snapped; empty book refuses honestly (`ImmediateOrCancelNoFill`).
+4. **Policy** — spread, balance, discipline streak evaluated; any DENY names its code.
+5. **Sign** — wallet prompt (Rabby/MetaMask on 50312); rejection is a clean failure state, not an error.
+6. **Receipt** — hash + status + explorer link immediately; fill follows via `getUserFills` (~3s indexer lag, polled).
+7. **Reconcile** — quoted vs actual compared and displayed; timeout without hash evidence becomes UNKNOWN + receipt poll, never FAILED.
+
+The contrast that sells it: quote **0.049**, fill **0.021** on [`0xed05c…72464c`](https://shannon-explorer.somnia.network/tx/0xed05c90f6426b096d63c6ee2edd3d8aa201e94080d7454bf2215add29c72464c) — every other terminal implies quote = fill; Steady proves they differ.
+
+## How I integrated DreamDEX Event Contracts
+
+Every capability is wired through the real venue, not faked:
+
+- **Live venue, not fixtures.** The board streams real binary markets (BTC/ETH, 1m/5m/15m/1h) from the DreamDEX indexer, filtered to `status 1` rows re-validated on-chain, sorted by time-to-close. When the venue rolls, the UI rolls with it.
+- **On-chain order-book execution.** Taps become real CLOB IOC orders (YES for UP, NO for DOWN in YES-terms pricing) against the market's pool. No paper trading, no simulated fills — the receipt hash on every ticket is a Shannon explorer link.
+- **Native settlement semantics.** UP wins at/above the window open, DOWN below; voids pay 0.5 both sides. Claims and history key off `isResolved`/`isVoided`/`winningOutcome` read straight from `getMarketOnchain`.
+- **Faucet-native onboarding.** Testnet tUSDC faucet (`trader.faucet()`, 10k cap) is a button in the ticket — a judge goes from landing to funded with one signature.
+- **Redemption that finds winnings.** Settled markets leave the live list, so Steady scans `listPastBinaryMarkets({status:"Finalized"})` + ERC-6909 balances — the winnings other UIs leave stranded.
+
+## Engineering decisions & the hard problems
+
+- **Policy at the boundary — the one rule everything else serves.** All writes flow through one `execute()`; the UI cannot bypass the gate by calling the trader directly because no other path exists.
+- **"Verified" had to mean something.** An early receipt showed the quoted price as the fill. I rewrote it to poll `getUserFills` after mining and display both — so quoted-vs-actual is chain truth, not decoration.
+- **The FOK bug — my favorite catch.** The first live order used orderType 1 (FillOrKill) with a non-crossing price and reverted `FillOrKillNotFillable`. IOC takers want orderType **2** with a crossing price. The harness failure taxonomy now maps every live revert we hit (`InvalidPrice`, `PriceOutOfBounds`, `ImmediateOrCancelNoFill`, `0xfb8f41b2`).
+- **`getOutcomeBalance` takes `{outcomeToken, account, id}`** — not `owner`. The error (`Address "undefined" is invalid`) hides the cause; our redemption layer documents the correct shape.
+- **Shell decoupled from data.** Static top-level SDK imports (~10s over esm.sh) once blocked the whole page. The SDK now lazy-loads; the shell boots instantly with explicit loading/error/retry states, and a 12s indexer timeout degrades to an honest error card — the app never blanks.
+- **UNKNOWN, not FAILED.** A submission timeout with a possible hash reconciles via receipt poll instead of claiming failure — a financial-systems pattern most hackathon frontends skip.
+
+## What's real vs not-yet — the honesty table
+
+| Capability | How it's backed |
+|---|---|
+| **Live markets + books** | Real DreamDEX indexer + on-chain reads; 12s timeout + Retry on outage. |
+| **IOC execution both directions** | Mined: `0xed05c…` (privateKey path), `0x6f6beb…` + `0x882858…` (walletClient path, same call the browser uses). |
+| **Browser-popup signature** | Code-complete (`createTrader({walletClient})`); final human click-through pending — the mock test rig throws honestly here instead of faking a hash. |
+| **Redemption** | Mined: `0x3aa5ec…` (balance 1000→0, +0.001 tUSDC). |
+| **"Verified" fill prices** | `getUserFills` chain reads, not flags. |
+| **Tilt cooldown** | Unit-verified (4/4) + fires on real outcomes; live record is 1W/1L so it hasn't triggered on-chain yet. |
+| **Brier/Edge** | Real math, honest "Need 5 settled" below threshold. |
+| **Faucet** | Real `trader.faucet()` (10k cap), mined `0xb0bd7b…`. |
+
+## The app
+
+Two surfaces, one design system (warm paper, ink, JetBrains Mono, risk typographically loudest):
+
+- **Homepage** (`/`) — thesis, problem, DECIDE→CHECK→EXECUTE→VERIFY loop, live proof hashes, terminal CTA.
+- **Terminal** (`/terminal`) — live windows rail, Honest Ticket with policy gate, positions lifecycle ledger, calibration + cooldown, settlement/redemption scanner, per-trade receipts.
+
+## Tech stack
+
+- **App:** static `app/` (no framework, no backend, no database) — ships as `dist/` to Vercel.
+- **Engine:** `lib/dreamdex/*` (real SDK integration) + `lib/steady/*` (pure ticket/scoring/discipline/lifecycle, dependency-free, unit-tested).
+- **Chain:** DreamDEX Event Contracts on Somnia Shannon 50312 via `@somnia-chain/markets-sdk@0.29.0` + `viem`.
+- **Tests:** node:test — 13 unit tests (ticket, scoring, discipline) + Playwright browser suite (homepage, shell, wallet-connect, mobile 375px).
+
+## Project layout
+
+```
+app/                          # static frontend (index.html, terminal.html, app.js, style.css)
+  index.html                  # homepage: thesis → loop → discipline → proof → CTA
+  terminal.html               # dashboard: rail + ticket + positions + score + settlement
+  app.js                      # single execute() boundary, lazy SDK import, reconciliation
+lib/
+  dreamdex/                   # client · markets · orderbook · execution · positions · settlement · redemption
+  steady/                     # ticket · scoring · discipline · lifecycle (pure, tested)
+  config/                     # chain 50312 + env contract (no secrets in browser vars)
+scripts/validate/             # live harness: gates 1–5 against Shannon (no mocks)
+tests/unit/ · tests/e2e/      # unit + Playwright browser suite
+research/                     # 00–60 audit trail: rules → protocol → product → control plane → readiness
+FEEDBACK.md                   # SDK/docs feedback for the DreamDEX team
+demo.md · demo-editing.md     # recording shot plan + editor handoff
+```
+
+## Run it locally
+
+**Prerequisites:** Node 20+, a Rabby/MetaMask wallet (for trading; reads work without one).
 
 ```bash
 npm install
-npm test            # 13 unit tests (ticket, scoring, discipline)
-npm run validate    # live read gates: markets → onchain → book → params (Shannon testnet)
-npm run dev         # http://localhost:5173 — homepage + terminal
-npm run build       # static dist/ (deployable as-is)
+npm test                # 13 unit tests, no keys required
+npm run validate        # live read gates 1–4 against Shannon (indexer + chain)
+npm run dev             # http://localhost:5173 — homepage + terminal
+npm run build           # static dist/
 ```
 
-Needs nothing but a browser. For trading, connect Rabby/MetaMask on Shannon 50312 with STT (gas) + tUSDC (faucet via Telegram dev group or in-app path).
+No env vars required for reads. Funded writes need `TEST_WALLET_PRIVATE_KEY` in local `.env` (never committed, never `NEXT_PUBLIC_*`) — see `.env.example`. Get test STT/tUSDC from the in-app faucet button or the Telegram dev group faucet topic.
 
-## How it works
+Without a wallet, Steady runs end-to-end in **read mode** — live markets, books, ticket math, honest empty states. Trading actions explain exactly what they need instead of failing silently.
 
-**DECIDE → CHECK → EXECUTE → VERIFY**
+## How I'd deploy it
 
-1. **Decide** — Honest ticket: enter max loss → quantity/pay/payout computed with tick/lot snapping. UP = YES outcome, DOWN = NO outcome.
-2. **Check** — Policy gate at the execution boundary: market Trading (status 1), headroom ≥60s, liquidity, spread <0.15, balance, 2-loss cooldown. Denials carry exact codes (`SPREAD_TOO_WIDE`, `COOLDOWN`, `ImmediateOrCancelNoFill`).
-3. **Execute** — Immediate-or-Cancel (orderType 2), expiry now+120s capped at marketExpiry−10s (nanoseconds), 60 gwei / 10M gas (SDK defaults).
-4. **Verify** — Receipt distinguishes **quoted vs actual** fill price; positions reconcile via `getUserFills`; settlement via Finalized scan + ERC-6909; redemption one click with explorer evidence.
+Static output: `npm run build` copies `app/*` to `dist/`; `vercel.json` points there. Production: [somnia-snowy.vercel.app](https://somnia-snowy.vercel.app) — smoke-tested (homepage + terminal × desktop/mobile, zero console errors, no localhost refs, no secrets). No env vars, no server, no database — the chain is the backend.
 
-## What Steady is not
+## Tests
 
-No AI forecaster, no leaderboard, no vault/pooling, no token, no custom contracts, no backend/database. A pure SDK consumer: browser → `@somnia-chain/markets-sdk@0.29.0` → indexer + WS → chain.
+```bash
+npm test                                              # 13 passing (ticket, scoring, discipline)
+npx playwright test tests/e2e/steady.spec.ts          # homepage, shell, wallet-connect, mobile 375px
+```
 
-## Docs
+The suite covers max-loss math, tick/lot snapping, Brier/Edge (including the <5 honest state), and the 2-loss cooldown state machine. Beyond unit tests, the flow is verified end-to-end against the **live** stack — discover → gate → IOC → receipt → fill → redeem — with the four mined hashes linked above.
 
-- `research/` — full audit trail (rules, protocol, scoring, control plane, brand, readiness).
-- `AGENTS.md` — contributor rules (testnet-only, no mocks, no secrets).
-- `memory.md` — operational continuation state.
+---
 
-## Known limitations (honest)
-
-- Browser-popup signing is implemented (`createTrader({walletClient})`, same call proven via Node both directions) but the final human click-through is pending — see handoff.
-- Brier/Edge need ≥5 settled fills; below that the UI says so instead of inventing a score.
-- Cooldown needs 2 trailing real losses to fire; unit-tested, not yet observed live.
-- Indexer outages degrade to explicit error + Retry (never stale-as-live); market rows need a reachable indexer.
-- Mobile 375px verified (0 overflow); 390/768/1280 inspected in code, captures pending.
-
-Testnet only. Not financial advice.
+Testnet only. Not financial advice. MIT — see [LICENSE](LICENSE).
