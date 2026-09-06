@@ -9,7 +9,7 @@
 
 Most prediction-market terminals answer one question: *how fast can you click?* Steady answers the harder one — **do you know what you can lose, is this trade allowed, and can you prove what actually filled?** Every trade carries a **Trade Receipt**: quoted vs actual fill price, policy checks, tx hash, order and fill IDs. And after 2 consecutive real losses, the terminal **blocks execution for 3 minutes** — not as a tooltip, as a gate at the signing boundary. Built on **DreamDEX Event Contracts** on **Somnia Shannon (50312)**.
 
-**[Watch the demo ↗](#-demo)** · **[Live demo ↗](https://somnia-snowy.vercel.app)** · **[How it works ↗](#architecture)** · **[Run it locally ↗](#run-it-locally)**
+**[Watch the demo ↗](#demo)** · **[Live demo ↗](https://somnia-snowy.vercel.app)** · **[How it works ↗](#architecture)** · **[Run it locally ↗](#run-it-locally)**
 
 ---
 
