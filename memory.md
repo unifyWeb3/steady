@@ -40,3 +40,5 @@
 **Audit 2026-09-05:** penultimate audit on branch frontend-reconstruction-v2 @93b0a9d (pushed). Rules/forensics/browser re-verified; README+LICENSE added; honest 73/100. Remaining: manual popup hash, vercel --prod, video, public flip. Main untouched at 6067026.
 
 **RC audit 2026-09-05:** research/51-60 done. Rules unchanged, forensics 4/4 re-PASS, Tock/PredicTrader/Dungeon mapped, honest 73/100. P0 tail: manual popup hash, video, vercel --prod, public flip.
+
+**Final window 2026-09-05:** faucet button live in ticket (browser-verified render). Vercel BLOCKED (no auth, whoami hangs). Human brief ready: 1h/4h window, max loss 2, UP then DOWN. Branch frontend-reconstruction-v2.

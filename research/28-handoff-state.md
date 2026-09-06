@@ -179,3 +179,10 @@ If interrupted, verify: `npm run validate` then `npm run validate:write` (should
 - Artifacts: README + LICENSE added; vercel.json ready; dist/ rebuilt (uncommitted? rebuilt — verify before submit).
 - Branch note: this audit committed on frontend-reconstruction-v2 (93b0a9d, pushed). main stays at 6067026 until reconstruction merges. Other session's untracked research/40-42/GEMINI-*/design-qa left for that session.
 - DO NOT claim: popup E2E, video, deploy, submission-ready.
+
+## Final execution window (2026-09-05, branch frontend-reconstruction-v2)
+- Gates 1-4 re-PASS on demand (`timeout 50 node scripts/validate/validate.mjs`, exit 0). Live now: 12 markets incl. 4h BTC/ETH windows (129m headroom) — recommend 1h/4h for human session (zero expiry pressure).
+- Vercel: CLI present (52.0.0) but `vercel whoami` hangs = NO non-interactive auth (no token, no .vercel). BLOCKED for human `vercel login` + `vercel --prod`. vercel.json ready + validated.
+- Faucet P1 DONE: ticket has "Get 10k test tUSDC" button → `createTrader({walletClient}).faucet()` → hash + balance refresh; browser-verified rendering, no pageerror. Judge with empty wallet no longer dead-ends.
+- Human session brief: open terminal → Connect (Rabby/MetaMask, 50312 auto-switch) → faucet if tUSDC 0 → pick BTC/ETH 1h/4h window (>5m headroom) → max loss 2 → Buy UP → sign → capture hash → repeat Buy DOWN → wait lock → Finalized → Redeem → screenshots.
+- DO NOT claim: popup E2E, video, deploy, submission-ready.

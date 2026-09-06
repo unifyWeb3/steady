@@ -185,6 +185,12 @@
         <!-- CONFIRMATION CHECKLINE -->
         <label class="checkline"><input type="checkbox" id="confirmBox"/><span>I understand my max loss is capped and this is an IOC — it fills what crosses and cancels the rest.</span></label>
 
+        <!-- TESTNET FAUCET (discoverability: empty wallet must never dead-end) -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button id="faucetBtn" class="btn btn-secondary btn-sm" type="button">Get 10k test tUSDC</button>
+          <span class="caption" id="faucetStatus">Shannon faucet · 10k cap · needs connected wallet</span>
+        </div>
+
         <!-- 4. DIRECTIONAL ACTIONS -->
         <div class="side-toggle" role="group" aria-label="Direction">
           <button id="buyYes" class="btn btn-up">Buy UP</button>

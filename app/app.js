@@ -59,6 +59,8 @@ const els = {
   last5: document.getElementById("last5"),
   // scoreDetail: document.getElementById("scoreDetail"),
   redeemAll: document.getElementById("redeemAll"),
+  faucetBtn: document.getElementById("faucetBtn"),
+  faucetStatus: document.getElementById("faucetStatus"),
   settlementList: document.getElementById("settlementList"),
   riskNum: document.getElementById("riskNum"),
   riskSub: document.getElementById("riskSub"),
@@ -741,6 +743,28 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=(e)=>{
   e.currentTarget.classList.add("active");
   renderPositions();
 });
+if(els.faucetBtn) els.faucetBtn.onclick = async()=>{
+  if(!walletAddress || !walletClient){ alert("Connect wallet first"); return; }
+  els.faucetBtn.disabled = true;
+  if(els.faucetStatus) els.faucetStatus.textContent = "Requesting 10k test tUSDC…";
+  try{
+    const ex = await getExchange();
+    const trader = ex.client.createTrader({ walletClient });
+    const res = await trader.faucet();
+    const receipt = res.receipt || res;
+    const hash = receipt.transactionHash || res.transactionHash || "unknown";
+    if(els.faucetStatus) els.faucetStatus.innerHTML = `Sent — <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${hash}" target="_blank" rel="noopener">${hash.slice(0,10)}… ↗</a>`;
+    try{
+      const sdk0 = await loadSdk();
+      const bal = await ex.client.getErc20Balance(sdk0.SOMNIA_TESTNET_ADDRESSES.collateral, walletAddress);
+      window.__tUSDCBalance = bal;
+      if(els.faucetStatus) els.faucetStatus.textContent = `Balance ${(Number(bal)/1e6).toFixed(2)} tUSDC — ready to trade`;
+      updatePreview();
+    }catch{}
+  }catch(e){
+    if(els.faucetStatus) els.faucetStatus.textContent = `Faucet failed: ${(e.message||String(e)).slice(0,120)}`;
+  }finally{ els.faucetBtn.disabled = false; }
+};
 els.redeemAll.onclick = async()=>{
   if(!walletAddress) return alert("Connect first");
   let ex;
