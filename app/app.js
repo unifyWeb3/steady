@@ -9,14 +9,17 @@ const ONE_6 = 1_000_000n;
 let _sdk = null; // { SomniaMarkets, SOMNIA_TESTNET_ADDRESSES, somniaShannon, viem }
 let _sdkError = null;
 function loadSdk(timeoutMs = 30000){
+  if(localStorage.getItem("steady:debug")) console.log("loadSdk started");
   if(_sdk) return Promise.resolve(_sdk);
   if(_sdkError) return Promise.reject(_sdkError);
   const p = (async()=>{
+    if(localStorage.getItem("steady:debug")) console.log("importing @somnia-chain/markets-sdk");
     const [sdk, chains, viem] = await Promise.all([
       import("@somnia-chain/markets-sdk"),
       import("@somnia-chain/markets-sdk/chains"),
       import("viem"),
     ]);
+    if(localStorage.getItem("steady:debug")) console.log("imports done");
     _sdk = { SomniaMarkets: sdk.SomniaMarkets, SOMNIA_TESTNET_ADDRESSES: sdk.SOMNIA_TESTNET_ADDRESSES, somniaShannon: chains.somniaShannon, viem };
     return _sdk;
   })();
@@ -54,12 +57,16 @@ const els = {
   brierLabel: document.getElementById("brierLabel"),
   scoreN: document.getElementById("scoreN"),
   last5: document.getElementById("last5"),
-  scoreDetail: document.getElementById("scoreDetail"),
+  // scoreDetail: document.getElementById("scoreDetail"),
   redeemAll: document.getElementById("redeemAll"),
+  faucetBtn: document.getElementById("faucetBtn"),
+  faucetStatus: document.getElementById("faucetStatus"),
   settlementList: document.getElementById("settlementList"),
   riskNum: document.getElementById("riskNum"),
   riskSub: document.getElementById("riskSub"),
   previewCappedRow: document.getElementById("previewCappedRow"),
+  ticketRows: document.getElementById("ticketRows"),
+  ticketCta: document.getElementById("ticketCta"),
 };
 
 let exchange = null;
@@ -107,9 +114,19 @@ function mktShort(id){ return id && id.length>10 ? "…"+id.slice(-6) : (id||"�
 function toProb(raw) { return Number(raw)/Number(ONE_6); }
 function tickSnap(priceRaw, tick){ return (priceRaw / tick) * tick; }
 
+let walletStatusText = "";
+
 function setStatus(msg, kind=""){
-  els.statusBar.textContent = msg;
-  els.statusBar.className = kind ? `alert alert-${kind}` : "alert";
+  let full = msg;
+  if (walletStatusText) {
+    full = `${walletStatusText} · ${msg}`;
+  }
+  els.statusBar.textContent = full;
+  if (kind) {
+    els.statusBar.style.color = kind === "risk" ? "var(--risk)" : kind === "success" ? "var(--up)" : "inherit";
+  } else {
+    els.statusBar.style.color = "inherit";
+  }
 }
 
 // Discovery — >60s headroom, with timeout and decoupled shell (app shell renders even if indexer hangs)
@@ -207,6 +224,9 @@ async function loadMarkets(){
       tr.onclick = () => selectMarket(m);
       els.marketTbody.appendChild(tr);
     }
+    // Never leave the ticket in its dead CTA state when live windows exist:
+    // preselect the soonest-expiring window (read-only book fetch, no order path).
+    if (!selected && display.length) selectMarket(display[0]);
     setStatus(`Live: ${display.length} Trading windows with >60s headroom (BTC/ETH 1m/5m/15m/1h)`, "success");
   }catch(e){
     clearTimeout(timeout);
@@ -282,12 +302,26 @@ function computeTicket(maxLossHuman, side){
 
 function updatePreview(){
   const v = Number(els.maxLoss.value);
-  if (!v || !selected) {
-    els.previewPay.textContent="—"; els.previewWin.textContent="—";
-    els.previewExpiry.textContent="—"; els.previewBook.textContent="—";
+  const ready = v > 0 && !!selected;
+  // Never show the 4-dash dead matrix: CTA until a window is picked AND max loss entered.
+  if (els.ticketRows) els.ticketRows.hidden = !ready;
+  if (els.ticketCta) {
+    els.ticketCta.style.display = ready ? "none" : "grid";
+    const sub = els.ticketCta.querySelector(".ticket-cta-sub");
+    if (sub) sub.textContent = !selected
+      ? "Live bid/ask, spread and expiry appear here — no invented numbers."
+      : "Enter a max loss above to price pay, profit and contracts.";
+  }
+  if (!ready) {
     if(els.riskNum) els.riskNum.textContent="—";
-    if(els.riskSub) els.riskSub.textContent = selected ? "Enter max loss" : "Enter max loss + pick a window";
+    if(els.riskSub) els.riskSub.textContent = !selected
+      ? (v > 0 ? "Pick a live window" : "Enter max loss + pick a window")
+      : "Enter max loss";
     els.buyYes.textContent="Buy UP"; els.buyNo.textContent="Buy DOWN";
+    if (!selected) {
+      els.previewPay.textContent="—"; els.previewWin.textContent="—";
+      els.previewExpiry.textContent="—"; els.previewBook.textContent="—";
+    }
     return;
   }
   // show both sides preview for current maxLoss; labels map UP=YES outcome, DOWN=NO outcome
@@ -359,8 +393,13 @@ async function connect(){
       const ex2 = await getExchange();
       const bal = await ex2.client.getErc20Balance(sdk0.SOMNIA_TESTNET_ADDRESSES.collateral, walletAddress);
       window.__tUSDCBalance = bal;
-      setStatus(`Connected ${walletAddress.slice(0,6)}… on 50312 — tUSDC ${(Number(bal)/1e6).toFixed(2)} — fetching fills…`, "success");
-    }catch(e){ window.__tUSDCBalance = 10_000_000n * 1000n; setStatus(`Connected ${walletAddress.slice(0,6)}… on 50312 — fetching fills…`, "success"); }
+      walletStatusText = `Connected ${walletAddress.slice(0,6)}… on 50312`;
+      setStatus(`tUSDC ${(Number(bal)/1e6).toFixed(2)} — fetching fills…`, "success");
+    }catch(e){
+      window.__tUSDCBalance = 10_000_000n * 1000n;
+      walletStatusText = `Connected ${walletAddress.slice(0,6)}… on 50312`;
+      setStatus(`fetching fills…`, "success");
+    }
     await refreshFills();
   }catch(e){ setStatus(`Connect failed: ${e.message}`, "risk"); }
   finally{ els.connectBtn.disabled = false; }
@@ -402,20 +441,41 @@ function renderPositions(){
     return;
   }
   tbody.innerHTML="";
-  for(const f of rows.slice(0,20)){
-    const tr=document.createElement("tr");
-    const side = f.takerSide||f.side||"—";
-    const sideCls = side.includes("YES") ? "badge badge-up" : side.includes("NO") ? "badge badge-down" : "badge badge-quiet";
-    const tx = f.txHash || "";
-    tr.innerHTML=`
-      <td data-l="Market" class="mono"><span class="rowmain">${mktShort(f.market)}</span><br><span class="caption">${(f.pool||"").slice(0,10)}…</span></td>
-      <td data-l="Side"><span class="${sideCls}">${side.replace("BUY_","")}</span></td>
-      <td data-l="Fill price" class="mono num">${f.fillPrice? (Number(f.fillPrice)/1e6).toFixed(3): "—"}</td>
-      <td data-l="Qty" class="mono num">${f.quantity? (Number(f.quantity)/1000).toFixed(3): "—"}</td>
-      <td data-l="State"><span class="${stateBadge(f._state)}">${f._state==="LIVE"?"● LIVE":f._state}</span></td>
-      <td data-l="Tx" class="mono" style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${tx?`<a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${tx}" target="_blank" rel="noopener">${shortHash(tx)} ↗</a>`:"—"}</td>
-      <td data-l="Action"><span class="caption">${f._expiry? fmtExpiry(f._expiry): "—"}</span></td>`;
-    tbody.appendChild(tr);
+  // Group fills by market: one strong group header per market instead of
+  // repeating the same truncated marketId + pool + tx on every row.
+  const groups = new Map();
+  for (const f of rows.slice(0,20)) {
+    const key = f.market || "unknown";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+  const intervalLabel = (s)=> s===60?"1m":s===300?"5m":s===900?"15m":s===3600?"1h":(s?`${s}s`:"");
+  for (const [marketId, fills] of groups) {
+    const m = marketsCache.find(x=>x.marketId===marketId);
+    const gLabel = m
+      ? `${m.asset} ${intervalLabel(m.intervalSec)} · expires ${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC · ${fills.length} fill${fills.length>1?"s":""}`
+      : `${mktShort(marketId)} · ${fills.length} fill${fills.length>1?"s":""}`;
+    const gh = document.createElement("tr");
+    gh.className = "pos-group";
+    gh.innerHTML = `<td colspan="7" data-l="Market"><span class="mono">${gLabel}</span> <span class="ticket-hint">${mktShort(marketId)}${fills[0]?.pool ? " · pool " + String(fills[0].pool).slice(0,10) + "…" : ""}</span></td>`;
+    tbody.appendChild(gh);
+    for(const f of fills){
+      const tr=document.createElement("tr");
+      const side = f.takerSide||f.side||"—";
+      const sideCls = side.includes("YES") ? "badge badge-up" : side.includes("NO") ? "badge badge-down" : "badge badge-quiet";
+      const tx = f.txHash || "";
+      // Quantity is 6-decimal raw (same base as ticket: 1000 raw = 1 lot = 0.001 contracts).
+      const qtyTxt = (f.quantity !== undefined && f.quantity !== null) ? (Number(f.quantity)/1e6).toFixed(3) : "—";
+      tr.innerHTML=`
+        <td data-l="Market" class="mono ticket-hint">${mktShort(f.market)}</td>
+        <td data-l="Side"><span class="${sideCls}">${side.replace("BUY_","")}</span></td>
+        <td data-l="Fill price" class="mono num">${f.fillPrice? (Number(f.fillPrice)/1e6).toFixed(3): "—"}</td>
+        <td data-l="Contracts" class="mono num">${qtyTxt}</td>
+        <td data-l="State"><span class="${stateBadge(f._state)}">${f._state==="LIVE"?"● LIVE":f._state}</span></td>
+        <td data-l="Tx" class="mono" style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${tx?`<a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${tx}" target="_blank" rel="noopener">${shortHash(tx)} ↗</a>`:"—"}</td>
+        <td data-l="Expiry" class="mono num ticket-hint">${f._expiry? fmtExpiry(f._expiry): "—"}</td>`;
+      tbody.appendChild(tr);
+    }
   }
 }
 
@@ -428,7 +488,7 @@ function renderScore(){
   if (fillsCache.length <5){
     els.brierVal.textContent = "— Need 5 settled";
     els.edgeVal.textContent = "—";
-    els.brierLabel.textContent = `You have ${fillsCache.length} fills — need 5 settled to calibrate`;
+    // els.brierLabel.textContent = `You have ${fillsCache.length} fills — need 5 settled to calibrate`;
     els.scoreN.textContent = `n ${fillsCache.length}`;
     els.brierFill.style.width="0%";
     els.last5.innerHTML = "";
@@ -436,7 +496,7 @@ function renderScore(){
   }
   // If we had priceProb + won, compute — but we need real outcomes; keep honest
   els.brierVal.textContent = `— need oracle outcomes (fetching…)`;
-  els.scoreDetail.textContent = `Fills found: ${fillsCache.length}. Resolving outcomes via market settlement…`;
+  // els.scoreDetail.textContent = `Fills found: ${fillsCache.length}. Resolving outcomes via market settlement…`;
   // Attempt to fetch quickly for last 5
   (async()=>{
     let ex;
@@ -467,7 +527,7 @@ function renderScore(){
       els.brierVal.textContent = brier.toFixed(3);
       els.edgeVal.textContent = (edge>=0?"+":"")+edge.toFixed(3);
       els.brierFill.style.width = `${Math.min(100, (brier/0.5)*100)}%`;
-      els.brierLabel.textContent = brier<0.25?"Steady": brier<0.33?"Drifting":"Tilting";
+      els.brierLabel && (els.brierLabel.textContent = brier<0.25?"Steady": brier<0.33?"Drifting":"Tilting");
       els.scoreN.textContent = `n ${settled.length}`;
       els.edgeFill.style.width = `${50+edge*100}%`;
       els.last5.innerHTML = settled.slice(-5).map(c=>`<span class="wl-dot ${c.won?"wl-w":"wl-l"}" title="${c.won?"Won":"Lost"}">${c.won?"W":"L"}</span>`).join("");
@@ -510,12 +570,16 @@ function renderDiscipline(calls){
     els.buyNo.disabled = true;
     els.buyYes.title = `Blocked: ${streak} losses — wait ${sec}s`;
     els.buyNo.title = `Blocked: ${streak} losses — wait ${sec}s`;
+    const gateBadge = document.getElementById("policyGateBadge");
+    if(gateBadge){ gateBadge.textContent = "Blocked"; gateBadge.className = "badge badge-down"; }
   } else {
     if(cooldownUntil && cooldownUntil <= Date.now()){
       cooldownUntil=null;
       try{ localStorage.removeItem("steady:cooldownUntil"); }catch{}
     }
     els.tiltGuard.style.display="none";
+    const gateBadge = document.getElementById("policyGateBadge");
+    if(gateBadge){ gateBadge.textContent = "Authorized"; gateBadge.className = "badge badge-up"; }
     // Only re-enable if not in SUBMITTING
     if(!window.__submitting){
       els.buyYes.disabled = false;
@@ -719,6 +783,28 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=(e)=>{
   e.currentTarget.classList.add("active");
   renderPositions();
 });
+if(els.faucetBtn) els.faucetBtn.onclick = async()=>{
+  if(!walletAddress || !walletClient){ alert("Connect wallet first"); return; }
+  els.faucetBtn.disabled = true;
+  if(els.faucetStatus) els.faucetStatus.textContent = "Requesting 10k test tUSDC…";
+  try{
+    const ex = await getExchange();
+    const trader = ex.client.createTrader({ walletClient });
+    const res = await trader.faucet();
+    const receipt = res.receipt || res;
+    const hash = receipt.transactionHash || res.transactionHash || "unknown";
+    if(els.faucetStatus) els.faucetStatus.innerHTML = `Sent — <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/${hash}" target="_blank" rel="noopener">${hash.slice(0,10)}… ↗</a>`;
+    try{
+      const sdk0 = await loadSdk();
+      const bal = await ex.client.getErc20Balance(sdk0.SOMNIA_TESTNET_ADDRESSES.collateral, walletAddress);
+      window.__tUSDCBalance = bal;
+      if(els.faucetStatus) els.faucetStatus.textContent = `Balance ${(Number(bal)/1e6).toFixed(2)} tUSDC — ready to trade`;
+      updatePreview();
+    }catch{}
+  }catch(e){
+    if(els.faucetStatus) els.faucetStatus.textContent = `Faucet failed: ${(e.message||String(e)).slice(0,120)}`;
+  }finally{ els.faucetBtn.disabled = false; }
+};
 els.redeemAll.onclick = async()=>{
   if(!walletAddress) return alert("Connect first");
   let ex;

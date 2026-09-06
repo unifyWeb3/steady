@@ -165,3 +165,47 @@ If interrupted, verify: `npm run validate` then `npm run validate:write` (should
 - npm run build → mkdir -p dist && cp -r app/* dist/ (static, no bundling, esm.sh CDN) — success dist 52K
 - Smoke test dist http://localhost:5174/ 200, no secrets in dist (grep TEST_WALLET_PRIVATE_KEY 0 hits)
 - Not yet deployed to Vercel (requires manual vercel --prod), but build is Vercel-ready static
+
+## Penultimate audit (2026-09-05, branch frontend-reconstruction-v2 @ 93b0a9d)
+- Rules re-verified live: Sep 8 18:00 (treat as UTC, submit by Sep 8 12:00 UTC), $5k USDso single pool, testnet+GitHub+video required, no tracks, 16 BUIDLs/314 hackers. Research/43.
+- Forensics re-PASS just now: 0xed05c (b477265538), 0x3aa5ec (b478925556), 0x6f6beb (b478978327), 0x882858 (b478978375) — all success, senders/pools match handoff.
+- Secrets PASS: no 64-hex keys in source/dist/history; .env never committed.
+- Competitors verified: Tock arcade+streaks, volatility Agent (custom router, weaker DreamDEX-dependence), Pryzm swarm, sigma odds layer; Rivo = unverified rumor. Adopted: shareable receipt card. Research/44.
+- Honest score 73/100 → ~80 with video + manual E2E. Research/45. Innovation thesis: accountability as product (46).
+- Interaction audit (47): no dead controls; tilt/positions PARTIAL as before; receipt panel wired.
+- State audit (48): no DB justified; one gap — receipt view lost on reload (P2, localStorage).
+- Gimmick audit (49): clean; debug logs gated, preview relabeled; dead refs guarded.
+- Readiness (50): top-5 = manual E2E hash, README/LICENSE/public-flip, hygiene (done), vercel --prod (no auth in env), video + SDK feedback.
+- Artifacts: README + LICENSE added; vercel.json ready; dist/ rebuilt (uncommitted? rebuilt — verify before submit).
+- Branch note: this audit committed on frontend-reconstruction-v2 (93b0a9d, pushed). main stays at 6067026 until reconstruction merges. Other session's untracked research/40-42/GEMINI-*/design-qa left for that session.
+- DO NOT claim: popup E2E, video, deploy, submission-ready.
+
+## Final execution window (2026-09-05, branch frontend-reconstruction-v2)
+- Gates 1-4 re-PASS on demand (`timeout 50 node scripts/validate/validate.mjs`, exit 0). Live now: 12 markets incl. 4h BTC/ETH windows (129m headroom) — recommend 1h/4h for human session (zero expiry pressure).
+- Vercel: CLI present (52.0.0) but `vercel whoami` hangs = NO non-interactive auth (no token, no .vercel). BLOCKED for human `vercel login` + `vercel --prod`. vercel.json ready + validated.
+- Faucet P1 DONE: ticket has "Get 10k test tUSDC" button → `createTrader({walletClient}).faucet()` → hash + balance refresh; browser-verified rendering, no pageerror. Judge with empty wallet no longer dead-ends.
+- Human session brief: open terminal → Connect (Rabby/MetaMask, 50312 auto-switch) → faucet if tUSDC 0 → pick BTC/ETH 1h/4h window (>5m headroom) → max loss 2 → Buy UP → sign → capture hash → repeat Buy DOWN → wait lock → Finalized → Redeem → screenshots.
+- DO NOT claim: popup E2E, video, deploy, submission-ready.
+
+## Frontend hierarchy pass (2026-09-06, video audit vs cairnsui.vercel.app)
+- Trigger: screen recording (`Recording 2026-09-06 161139.mp4`) showed Steady terminal reading as unstructured slop next to Cairn's disciplined hierarchy (one idea/viewport, designed tables, no dead centerpiece).
+- Fixes, all presentation-only — `lib/`, `scripts/`, order construction untouched:
+  - Ticket: `#ticketCta` replaces 4-dash dead matrix until window picked + max loss entered (`terminal.html`, `app.js:updatePreview`); auto-select soonest live window on load (read-only book fetch); 3 blocks separated by `.ticket-div` rules; `[hidden]` override fix (`.ticket-rows[hidden]{display:none}` — author `display:grid` was beating UA hidden).
+  - Positions: qty `/1000`→`/1e6` (was rendering 1000× vs ticket, e.g. 330000.000); fills grouped under one market header row; `Action`→`Expiry` honest label; header `Qty`→`Contracts`.
+  - Type: sentence-case in-ticket labels (uppercase kept for eyebrows only); ticket elevated via `.ticket-featured` (border-2 + shadow); discovery rows densified; audit scanner slim until Finalized results exist.
+  - Auxlo verdict: `md.auxlo.xyz/docs` is a URL-to-Markdown API, not a UI kit — not applicable to this task.
+- Verified: `node --check` OK, 13/13 unit PASS, Playwright chromium 1280+375: 0px overflow, CTA-visible/rows-hidden default state, 0 pageerrors (`/tmp/opencode/term-*.png`); `npm run build` dist refreshed (gitignored).
+- Backend-safe: zero SDK call changes; `execute()` untouched; no mocks added.
+
+## Release execution (2026-09-06, branch frontend-reconstruction-v2)
+- Pre-deploy: unit 13/13 PASS; build OK (dist 92K). Gates 1-4: indexer 504 then timeout (transient outage, honest error path in app covers it); protocol unchanged since last PASS.
+- Deploy: `vercel --prod --yes` as oxunifyy → Production https://somnia-hhacr531b-oxunify.vercel.app, alias https://somnia-snowy.vercel.app (17s build).
+- Prod smoke (Playwright chromium, real prod URL): home+terminal × 1280/375 all load with correct titles, ZERO console/page errors, no localhost refs, no secrets. Screenshots test-results/prod-*.png.
+- Docs: README (prod URL + limitations), FEEDBACK.md (8 items), demo.md (10-shot plan), demo-editing.md. Faucet button live in ticket.
+- Human tail: popup E2E (UP+DOWN hashes) → video → public flip → BUIDL before Sep 8 12:00 UTC. Recommend 1h/4h windows at session time; verify via npm run validate first.
+
+## Backend track addendum (2026-09-06 — no `app/` edits, frontend session owns wiring)
+- Redemption write path now exists lib-side: `redeemAllClaimable` (scan → ONE `redeemMany` tx via `walletClient`); pure `resolvePositionState` for all 6 tabs. Contract + snippets: `research/61-walletclient-redemption.md`.
+- Gate 6 PASS (read-only): 3 claimables live on funded wallet — DO NOT redeem off-camera; save for demo.
+- Suite 29/29, validate 1-4+6 PASS, build OK. Tree: backend files + `.gitignore` (*.mp4, test-results/) + frontend checkpoint commit pending merge to `main`.
+- Frontend session: port the two snippets in 61 into `app.js` (`redeemAll` → real redeem; `renderPositions` → resolver + `getOutcomeBalance`×2). Receipt share-card still open (P1).

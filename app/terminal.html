@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Steady — Discipline-First Terminal for DreamDEX Event Contracts</title>
-<meta name="description" content="Live BTC/ETH Up/Down windows on Shannon 50312. Honest ticket, policy gate, IOC execution, positions, calibration, settlement receipts."/>
+<title>Steady Terminal — Know the downside before you enter.</title>
+<meta name="description" content="Live BTC/ETH Up/Down windows on Somnia Shannon. Honest ticket, policy gate, IOC execution, positions, calibration, settlement receipts."/>
 <link rel="stylesheet" href="./style.css"/>
 </head>
 <body>
+<!-- SCREEN 1: DASHBOARD SHELL & COMMAND MASTHEAD -->
 <header class="header header-dark">
   <div class="grid header-inner">
     <div class="brand-cluster">
       <span class="brand"><span class="brand-mark">S</span>STEADY</span>
       <span class="badge">Shannon 50312 · Testnet</span>
-      <span class="caption header-caption">DreamDEX Event Contracts · BTC/ETH · 1m/5m/15m/1h</span>
     </div>
     <nav class="navlinks" aria-label="Terminal sections">
       <a href="#discovery">Markets</a>
@@ -26,151 +26,241 @@
       <span id="walletAddr" class="mono" style="font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Not connected">—</span>
       <button id="connectBtn" class="btn btn-secondary btn-sm">Connect</button>
       <a class="badge" href="./index.html">Home</a>
-      <a class="badge" href="https://shannon-explorer.somnia.network" target="_blank" rel="noopener">Explorer ↗</a>
     </div>
   </div>
 </header>
 
-<main class="grid" style="padding:24px 0 48px;display:grid;gap:20px">
-  <!-- PHILOSOPHY + STATUS -->
-  <section class="surface" style="padding:20px;display:grid;gap:10px">
-    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
-      <span class="eyebrow">Discipline · Clarity · Verification</span>
-      <span class="badge badge-live"><span class="dot"></span><span id="marketCount">—</span></span>
+<main class="grid" style="padding:24px 0 48px;display:grid;gap:24px">
+  <!-- OPERATIONAL CONTROL HEAD -->
+  <section class="editorial-head">
+    <div style="display:grid;gap:6px">
+      <div class="eyebrow">Terminal Workspace</div>
+      <h1 class="h1">Operational Control</h1>
     </div>
-    <h1 class="h1">Know the downside before you enter.</h1>
-    <p class="small" style="margin:0;max-width:760px">Pick a live window. State your max loss. Read the consequence — pay, payout, spread, expiry, policy — then sign one IOC. Every fill is traceable to a hash.</p>
-    <div id="statusBar" class="alert" role="status">Connecting to indexer…</div>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div id="statusBar" class="caption" style="display:flex;align-items:center;gap:8px">Connecting to indexer…</div>
+      <span class="badge badge-live"><span class="dot"></span><span id="marketCount">0</span> Live Windows</span>
+    </div>
   </section>
 
+  <!-- ASYMMETRIC INSTRUMENT WORKSPACE: 1.2fr (Discovery/Positions) : 0.8fr (Honest Ticket/Gate/Proof) -->
   <div class="term-grid">
-    <!-- A. DISCOVERY -->
-    <section id="discovery" class="surface" style="overflow:hidden" aria-label="Live windows">
-      <div class="panel-head">
-        <h2 class="h2">Live windows</h2>
-        <div style="display:flex;gap:8px;align-items:center">
+    <!-- LEFT COLUMN: MARKET DISCOVERY & ACTIVE TELEMETRY -->
+    <div style="display:grid;gap:24px;min-width:0">
+      <!-- SCREEN 2: MARKET DISCOVERY RAIL -->
+      <section id="discovery" class="surface" style="overflow:hidden" aria-label="Live windows">
+        <div class="panel-head">
+          <h2 class="h2">Live Windows</h2>
           <button id="refreshBtn" class="btn btn-secondary btn-sm">Refresh</button>
         </div>
-      </div>
-      <div class="caption panel-sub">Time left · spread · book · on-chain status 1 Trading only · &gt;60s headroom</div>
-      <div class="tablewrap">
-        <table class="table" id="marketTable">
-          <thead><tr><th>Market</th><th>Expiry</th><th>Time left</th><th class="num">Best bid / ask</th><th class="num">Spread</th><th></th></tr></thead>
-          <tbody id="marketTbody"><tr><td colspan="6" class="empty"><div class="title">Loading live markets…</div><div class="body caption">Reading indexer + on-chain gate</div></td></tr></tbody>
-        </table>
-      </div>
-      <div id="marketEmpty" class="empty" style="display:none">
-        <div class="title">No live windows with headroom</div>
-        <div class="body">All windows are settling or locked. Next window in ~1m — retrying automatically.</div>
-      </div>
-    </section>
+        <div class="caption panel-sub">BTC / ETH · 1m / 5m / 15m / 1h · Trading status 1 only · &gt;60s headroom</div>
+        <div class="tablewrap">
+          <table class="table" id="marketTable">
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Expiry (UTC)</th>
+                <th>Time Left</th>
+                <th class="num">Best Bid / Ask</th>
+                <th class="num">Spread</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="marketTbody">
+              <tr><td colspan="6" class="empty"><div class="title">Loading live telemetry…</div><div class="body caption">Connecting to Shannon indexer + on-chain gate</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="marketEmpty" class="empty" style="display:none">
+          <div class="title">No live windows with headroom</div>
+          <div class="body">Next window available in ~1m. Retrying automatically.</div>
+        </div>
+      </section>
 
-    <!-- B. HONEST TICKET -->
-    <section id="ticket" class="surface ticket" style="padding:16px;display:grid;gap:12px;align-self:start" aria-label="Honest ticket">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <h2 class="h2">Honest ticket</h2>
-        <span class="badge">IOC · type 2</span>
-      </div>
-      <div id="ticketMarket" class="caption" style="min-height:18px">Select a market →</div>
+      <!-- SCREEN 6: POSITIONS LIFECYCLE LEDGER -->
+      <section id="positions" class="surface panel-quiet" style="overflow:hidden" aria-label="Positions ledger">
+        <div class="panel-head">
+          <h2 class="h2">Positions Lifecycle</h2>
+          <button id="redeemAll" class="btn btn-secondary btn-sm">Redeem Claimable</button>
+        </div>
+        <div class="caption panel-sub">Verifiable fill history · on-chain settlement · ERC-6909 redemption</div>
+        <div class="tabs" id="posTabs" role="tablist" style="margin-top:10px">
+          <button class="tab active" data-tab="ALL" role="tab">All</button>
+          <button class="tab" data-tab="LIVE" role="tab">Live</button>
+          <button class="tab" data-tab="SETTLING" role="tab">Settling</button>
+          <button class="tab" data-tab="CLAIMABLE" role="tab">Claimable</button>
+          <button class="tab" data-tab="WON" role="tab">Won</button>
+          <button class="tab" data-tab="LOST" role="tab">Lost</button>
+          <button class="tab" data-tab="VOID" role="tab">Void</button>
+        </div>
+        <div class="tablewrap" style="border-top:0;margin-top:0">
+          <table class="table" id="posTable">
+            <thead>
+              <tr>
+                <th>Market</th>
+                <th>Side</th>
+                <th class="num">Fill Price</th>
+                <th class="num">Contracts</th>
+                <th>State</th>
+                <th>Tx</th>
+                <th class="num">Expiry</th>
+              </tr>
+            </thead>
+            <tbody id="posTbody">
+              <tr><td colspan="7" class="empty"><div class="title">Connect wallet to view lifecycle telemetry.</div><div class="body">Fills, settlement, and redemption appear here without simulated rows.</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-      <div style="display:grid;gap:8px">
-        <label class="caption" for="maxLoss">Max loss (tUSDC) — capped downside</label>
-        <input id="maxLoss" class="input input-lg mono" type="number" min="0.1" step="0.1" placeholder="25.0" inputmode="decimal"/>
-        <div class="caption">One lot = 1000 raw · Tick 1000 = 0.001 · 6 decimals</div>
-      </div>
+      <!-- SCREEN 5: AUDIT SCANNER (SUPPORTING EVIDENCE — slim strip until Finalized results exist) -->
+      <section id="settlement" class="surface panel-quiet audit-strip" style="padding:14px 16px;display:grid;gap:8px" aria-label="Settlement and audit">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2 class="h2" style="font-size:16px">Audit &amp; Settlement Scanner</h2>
+          <span class="badge">ERC-6909</span>
+        </div>
+        <div class="ticket-hint">Finalized market reconciliation · oracle reference · void pays 0.5 per side</div>
+        <div id="settlementList" class="audit-list" style="display:grid;gap:8px">
+          <div class="empty empty-slim"><div class="title">No finalized records in view</div><div class="body">Winnings appear here after settlement scan.</div></div>
+        </div>
+      </section>
+    </div>
 
-      <div class="ticket-risk" aria-live="polite">
-        <span class="caption">Max loss — decide on this number</span>
-        <span class="risk-num" id="riskNum">—</span>
-        <span class="caption" id="riskSub">Enter max loss + pick a window</span>
-      </div>
+    <!-- RIGHT COLUMN: THE HONEST TICKET (CENTERPIECE) + POLICY GATE + CALIBRATION -->
+    <div style="display:grid;gap:24px">
+      <!-- SCREEN 3: HONEST TICKET (THE SIGNATURE PRODUCT OBJECT) -->
+      <section id="ticket" class="surface ticket ticket-featured" style="padding:18px;display:grid;gap:0;align-self:start" aria-label="Honest ticket">
+        <div class="ticket-block">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <h2 class="h2">Honest Ticket</h2>
+            <span class="badge badge-solid">Type 2 IOC</span>
+          </div>
+          <div id="ticketMarket" class="ticket-market-line mono" style="min-height:18px">Select a live window from the rail →</div>
 
-      <div class="ticket-rows">
-        <div class="ticket-row"><span class="k">Pay → win</span><span class="v" id="previewPay">—</span></div>
-        <div class="ticket-row"><span class="k">Profit · contracts</span><span class="v" id="previewWin">—</span></div>
-        <div class="ticket-row"><span class="k">Entry · expiry · spread</span><span class="v" id="previewExpiry">—</span></div>
-        <div class="ticket-row"><span class="k">Book</span><span class="v" id="previewBook">—</span></div>
-        <div class="ticket-row" id="previewCappedRow" style="display:none"><span class="k">Capped by</span><span class="v" id="previewCapped">—</span></div>
-      </div>
+          <!-- 1. DECISION INPUT: MAX LOSS -->
+          <div style="display:grid;gap:6px">
+            <label class="ticket-field-label" for="maxLoss">Max loss (tUSDC) — capped downside</label>
+            <input id="maxLoss" class="input input-lg mono" type="number" min="0.1" step="0.1" placeholder="25.0" inputmode="decimal"/>
+            <div class="ticket-hint">1 lot = 1000 raw · Tick 1000 = 0.001 · 6 decimals</div>
+          </div>
 
-      <div class="side-toggle" role="group" aria-label="Direction">
-        <button id="buyYes" class="btn btn-up">Buy UP</button>
-        <button id="buyNo" class="btn btn-down">Buy DOWN</button>
-      </div>
+          <!-- 2. DOMINANT RISK TYPOGRAPHY -->
+          <div class="ticket-risk" aria-live="polite">
+            <span class="ticket-field-label">Max loss — decide on this number</span>
+            <span class="risk-num" id="riskNum">—</span>
+            <span class="ticket-hint" id="riskSub">Enter max loss + pick a window</span>
+          </div>
 
-      <label class="checkline"><input type="checkbox" id="confirmBox"/><span>I understand my max loss is capped and this is an IOC — it fills what crosses and cancels the rest.</span></label>
+          <!-- 3. EXPECTED OUTCOME MATRIX (hidden until a window is selected — never show 4 dead dashes) -->
+          <div id="ticketCta" class="ticket-cta">
+            <div class="ticket-cta-title">Pick a live window to price this ticket</div>
+            <div class="ticket-cta-sub">Live bid/ask, spread and expiry appear here — no invented numbers.</div>
+          </div>
+          <div class="ticket-rows" id="ticketRows" hidden>
+            <div class="ticket-row"><span class="k">Pay → win</span><span class="v" id="previewPay">—</span></div>
+            <div class="ticket-row"><span class="k">Profit · contracts</span><span class="v" id="previewWin">—</span></div>
+            <div class="ticket-row"><span class="k">Entry · expiry · spread</span><span class="v" id="previewExpiry">—</span></div>
+            <div class="ticket-row"><span class="k">Book depth</span><span class="v" id="previewBook">—</span></div>
+            <div class="ticket-row" id="previewCappedRow" style="display:none"><span class="k">Policy state</span><span class="v" id="previewCapped">—</span></div>
+          </div>
+        </div>
 
-      <div id="tiltGuard" class="cooldown" style="display:none" role="alert">
-        <div class="co-head"><span class="co-title">Cooldown active</span><span class="co-timer" id="tiltCountdown">3:00</span></div>
-        <div class="co-sub" id="tiltMsg">2 consecutive losses. Trading resumes shortly.</div>
-      </div>
-      <div id="execStatus" class="alert" style="display:none" role="status"></div>
-      <div id="tradeReceipt" class="receipt" style="display:none"></div>
-      <div class="caption">Expire now+120s capped at marketExpiry−10s · nanos · tick-snapped · 60 gwei / 10M gas (SDK default)</div>
-    </section>
+        <hr class="ticket-div"/>
+
+        <!-- SCREEN 4: POLICY CONTROL GATE (FIRST-CLASS PRIMITIVE) -->
+        <div class="ticket-block">
+          <div id="policyGate" class="policy-box" aria-label="Policy control gate">
+            <div class="policy-head">
+              <span class="ticket-field-label" style="font-weight:700">Policy Control Gate</span>
+              <span id="policyGateBadge" class="badge badge-up">Authorized</span>
+            </div>
+            <div class="policy-list">
+              <div class="policy-item"><span class="check">✓</span> <span>Market Trading (1)</span></div>
+              <div class="policy-item"><span class="check">✓</span> <span>Headroom ≥ 60s</span></div>
+              <div class="policy-item"><span class="check">✓</span> <span>Book Liquidity</span></div>
+              <div class="policy-item"><span class="check">✓</span> <span>Spread &lt; 0.150</span></div>
+              <div class="policy-item"><span class="check">✓</span> <span>Discipline Clear</span></div>
+              <div class="policy-item"><span class="check">✓</span> <span>Balance Sufficient</span></div>
+            </div>
+          </div>
+
+          <!-- COOLDOWN ACTIVE FEATURE PANEL -->
+          <div id="tiltGuard" class="cooldown" style="display:none" role="alert">
+            <div class="co-head"><span class="co-title">COOLDOWN ACTIVE</span><span class="co-timer" id="tiltCountdown">3:00</span></div>
+            <div class="co-sub" id="tiltMsg">2 consecutive losses. Trading suspended.</div>
+            <div class="co-meta">Discipline protection active · Brier &lt; 0.25 target</div>
+          </div>
+        </div>
+
+        <hr class="ticket-div"/>
+
+        <!-- CONFIRM + FUND + EXECUTE -->
+        <div class="ticket-block">
+          <!-- CONFIRMATION CHECKLINE -->
+          <label class="checkline"><input type="checkbox" id="confirmBox"/><span>I understand my max loss is capped and this is an IOC — it fills what crosses and cancels the rest.</span></label>
+
+          <!-- TESTNET FAUCET (discoverability: empty wallet must never dead-end) -->
+          <div class="faucet-row">
+            <button id="faucetBtn" class="btn btn-secondary btn-sm" type="button">Get 10k test tUSDC</button>
+            <span class="ticket-hint" id="faucetStatus">Shannon faucet · 10k cap · needs connected wallet</span>
+          </div>
+
+          <!-- 4. DIRECTIONAL ACTIONS -->
+          <div class="side-toggle" role="group" aria-label="Direction">
+            <button id="buyYes" class="btn btn-up">Buy UP</button>
+            <button id="buyNo" class="btn btn-down">Buy DOWN</button>
+          </div>
+
+          <!-- EXECUTION STATUS -->
+          <div id="execStatus" class="alert" style="display:none" role="status"></div>
+
+          <!-- SCREEN 5: TRADE PROOF (ANSWER RECEIPT EQUIVALENT) -->
+          <div id="tradeReceipt" class="receipt" style="display:none"></div>
+
+          <div class="ticket-footnote">Expire now+120s capped at marketExpiry−10s · nanos · tick-snapped · 60 gwei / 10M gas</div>
+        </div>
+      </section>
+
+      <!-- SCREEN 7: CALIBRATION & DISCIPLINE ENGINE -->
+      <section id="score" class="surface" style="padding:18px;display:grid;gap:14px" aria-label="Calibration and discipline">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h2 class="h2">Calibration</h2>
+          <span id="scoreN" class="badge">n —</span>
+        </div>
+        <div class="split">
+          <div style="display:grid;gap:6px;align-content:start">
+            <div class="caption">Brier score — 0 perfect · 0.25 guessing</div>
+            <div id="brierVal" class="kpi">— Need 5 settled</div>
+            <div class="bar" aria-hidden="true"><div id="brierFill" class="bar-fill" style="width:0%"></div><div class="bar-guess" title="0.25 guessing"></div></div>
+            <div class="caption" style="display:flex;justify-content:space-between;font-size:10px"><span>0.0 Sharp</span><span>0.25 Guessing</span><span>0.5</span></div>
+            <div id="brierLabel" class="caption" style="font-weight:600"></div>
+          </div>
+          <div style="display:grid;gap:6px;align-content:start">
+            <div class="caption">Edge — win rate minus avg price</div>
+            <div id="edgeVal" class="kpi">—</div>
+            <div class="bar" aria-hidden="true"><div id="edgeFill" class="bar-fill" style="width:0%"></div></div>
+            <div class="caption" style="font-size:10px">Positive = you beat the price</div>
+            <div id="last5" style="display:flex;gap:6px;flex-wrap:wrap;min-height:24px"></div>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
-
-  <!-- D. SCORE / DISCIPLINE -->
-  <section id="score" class="surface" style="padding:16px;display:grid;gap:14px" aria-label="Calibration and discipline">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <h2 class="h2">Calibration</h2>
-      <span id="scoreN" class="badge">n —</span>
-    </div>
-    <div class="split">
-      <div style="display:grid;gap:8px;align-content:start">
-        <div class="caption">Brier score — 0 perfect · 0.25 guessing</div>
-        <div id="brierVal" class="kpi">— Need 5 settled</div>
-        <div class="bar" aria-hidden="true"><div id="brierFill" class="bar-fill" style="width:0%"></div><div class="bar-guess" title="0.25 guessing"></div></div>
-        <div class="caption" style="display:flex;justify-content:space-between"><span>0 sharp</span><span>0.25 guessing</span><span>0.5</span></div>
-        <div id="brierLabel" class="caption"></div>
-      </div>
-      <div style="display:grid;gap:8px;align-content:start">
-        <div class="caption">Edge — win rate minus avg price</div>
-        <div id="edgeVal" class="kpi">—</div>
-        <div class="bar" aria-hidden="true"><div id="edgeFill" class="bar-fill" style="width:0%"></div></div>
-        <div class="caption">Positive = you beat the price</div>
-        <div id="last5" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-      </div>
-    </div>
-    <div id="scoreDetail" class="caption"></div>
-  </section>
-
-  <!-- C. POSITIONS -->
-  <section id="positions" class="surface" style="overflow:hidden" aria-label="Positions">
-    <div class="panel-head">
-      <h2 class="h2">Positions — what do you hold, what can you do next?</h2>
-      <button id="redeemAll" class="btn btn-secondary btn-sm">Redeem claimable</button>
-    </div>
-    <div class="tabs" id="posTabs" role="tablist">
-      <button class="tab active" data-tab="ALL" role="tab">All</button>
-      <button class="tab" data-tab="LIVE" role="tab">Live</button>
-      <button class="tab" data-tab="SETTLING" role="tab">Settling</button>
-      <button class="tab" data-tab="CLAIMABLE" role="tab">Claimable</button>
-      <button class="tab" data-tab="WON" role="tab">Won</button>
-      <button class="tab" data-tab="LOST" role="tab">Lost</button>
-      <button class="tab" data-tab="VOID" role="tab">Void</button>
-    </div>
-    <div class="tablewrap" style="border-top:0;margin-top:0">
-      <table class="table" id="posTable">
-        <thead><tr><th>Market</th><th>Side</th><th class="num">Fill price</th><th class="num">Qty</th><th>State</th><th>Tx</th><th>Action</th></tr></thead>
-        <tbody id="posTbody"><tr><td colspan="7" class="empty"><div class="title">Connect wallet to see positions.</div><div class="body">Fills, lifecycle, and redemption appear here — no simulated rows.</div></td></tr></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- E. SETTLEMENT / AUDIT -->
-  <section id="settlement" class="surface" style="padding:16px;display:grid;gap:10px" aria-label="Settlement and redemption">
-    <h2 class="h2">Settlement &amp; redemption</h2>
-    <div class="caption">Market → resolution → outcome → oracle reference → transaction evidence. Void pays 0.5 per side.</div>
-    <div id="settlementList" style="display:grid;gap:8px"><div class="empty"><div class="title">No settled positions yet</div><div class="body">After a market locks, redemption is a Finalized scan (not the live list) plus ERC-6909 balances.</div></div></div>
-  </section>
-
-  <footer class="caption" style="text-align:center;padding:20px 0 8px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-    <span>Steady · Shannon 50312 testnet only · No mocks · Every hash is mined</span>
-    <a href="https://shannon-explorer.somnia.network" target="_blank" rel="noopener">Explorer ↗</a>
-    <a href="https://docs.dreamdex.io/developers/event-contracts" target="_blank" rel="noopener">Docs ↗</a>
-  </footer>
 </main>
+
+<footer class="site">
+  <div class="grid" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+    <div style="display:flex;gap:12px;align-items:center">
+      <span class="brand" style="font-size:16px"><span class="brand-mark" style="width:20px;height:20px;font-size:11px">S</span>STEADY</span>
+      <span class="caption">Discipline-first terminal for DreamDEX Event Contracts</span>
+    </div>
+    <div style="display:flex;gap:16px;align-items:center">
+      <a class="caption" href="https://docs.dreamdex.io/developers/event-contracts" target="_blank" rel="noopener">Docs ↗</a>
+      <a class="caption" href="https://shannon-explorer.somnia.network" target="_blank" rel="noopener">Explorer ↗</a>
+      <span class="caption">Shannon 50312 · Testnet</span>
+    </div>
+  </div>
+</footer>
 
 <script type="importmap">
 {
@@ -187,13 +277,13 @@
 setTimeout(function(){
   if(!window.__steadyBooted){
     var tb = document.getElementById("marketTbody");
-    if(tb && tb.textContent.indexOf("Loading live markets") !== -1){
+    if(tb && tb.textContent.indexOf("Loading live telemetry") !== -1){
       tb.innerHTML = '<tr><td colspan="6" class="empty"><div class="title">App failed to initialize</div><div class="body">SDK import or network blocked (check console, esm.sh reachable?)</div><button class="btn btn-secondary btn-sm" onclick="location.reload()">Reload</button></td></tr>';
     }
     var sb = document.getElementById("statusBar");
     if(sb && sb.textContent.indexOf("Connecting to indexer") !== -1){
       sb.innerHTML = '<span class="code">INIT_FAILED</span> Init failed — SDK/network blocked. Check console, then reload.';
-      sb.className = "alert alert-risk";
+      sb.className = "caption alert-risk";
     }
   }
 }, 15000);

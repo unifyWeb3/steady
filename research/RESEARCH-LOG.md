@@ -100,3 +100,24 @@
 - Policy consistency: preview shows DENIED during cooldown; receipt labeled policy-at-execution; cooldown enforced at boundary.
 - Browser (chromium 1234): 5/5 Playwright PASS on merged tree; mobile 375px 0 overflow + screenshot; indexer timeout path exercised honestly (transient from this env, node harness passes when reachable).
 - Real-popup signing still CODE-EXISTS-BUT-UNVERIFIED (mock throws honestly on eth_sendTransaction). No mocks as real. dist/ rebuilt 84K.
+
+## 2026-09-05 — Penultimate audit (3 days to deadline)
+- Rules re-verified live (DoraHacks): Sep 8 18:00, $5k USDso, testnet+GitHub+video, no tracks, 16 BUIDLs/314 hackers. Gaps found: NO README, NO LICENSE → both written from verified evidence only.
+- Forensics re-PASS: all 4 headline txs success on-chain just now (0xed05c b477265538, 0x3aa5ec b478925556, 0x6f6beb b478978327, 0x882858 b478978375).
+- Secrets scan PASS: no 64-hex keys in source/dist/history; .env never committed.
+- Competitors: Tock (arcade+streaks), volatility Agent (custom router — weaker DreamDEX-dependence), Pryzm swarm, sigma odds layer. Rivo unverified rumor. No one in discipline wedge. Adopted one idea: shareable receipt card (text+link, no gamification).
+- Honest score: 73/100 (80 with video + manual E2E). Research/43-50 written.
+- Hygiene: debug logs gated behind localStorage steady:debug; homepage preview relabeled illustrative.
+
+## 2026-09-05 — Release-candidate audit (51-60)
+- Rules re-locked live: Sep 8 18:00, $5k, testnet+GitHub+video, no tracks, 27 BUIDLs/345 hackers. SDK still 0.29.0, no drift.
+- Forensics re-PASS just now on all 4 txs (success, blocks/gas match handoff).
+- Fresh intel: Tock live+breathed (proof/MCP/rides), PredicTrader live (ensemble+copy), Dungeon HAS VIDEO + mainnet, Agent verified contract. Rivo unverified rumor. Adopted: receipt share-card (text+link only).
+- Honest score 73 → ~80 with video + manual E2E. No scope added; P1 hygiene (debug gate, preview relabel, lot caption, side-aware preview) applied and verified (APP_OK, 13/13, 5/5 browser).
+- Secrets re-PASS. No DB justified (48). No gimmicks found (49).
+
+## 2026-09-06 — WalletClient redemption backend (61)
+- Verified: `getClaimable` → `redeemMany` one-tx close-out, `createTrader({walletClient})` for popup redeem, module-routed `redeem`, MarketStatus enum + `winningOutcome`-only-when-`isResolved` (all d.ts refs in 61).
+- Live: Gate 6 PASS — 3 real claimables on funded wallet (2005000000/1243000/1000 raw, Finalized). NOT redeemed (saved for demo camera).
+- New intel: 4h/1d/45d BTC/ETH windows now listed (Gate 2); filters still 60/300/900/3600 — frontend call to surface 4h/1d.
+- Suite 13 → 29/29 PASS. No scope added; no `app/` edits (frontend session owns wiring per contract in 61).
