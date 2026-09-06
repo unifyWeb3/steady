@@ -1,6 +1,6 @@
 # Implementation Status — Steady
 
-Last updated: 2026-09-04 — Frontend reconstruction (design.md + 38/39) browser-QA'd (chromium qa-* shots, 0 overflow); gates 1-4 re-PASS + dist 84K no secrets; real-popup signing still CODE-EXISTS-BUT-UNVERIFIED
+Last updated: 2026-09-06 — FRONTEND HIERARCHY PASS (branch frontend-hierarchy-pass, video audit vs cairnsui): ticket CTA replaces dead dash-matrix + auto-select first window + block regroup, positions qty /1000→/1e6 + grouped by market + Action→Expiry/Contracts, sentence-case ticket labels, featured ticket elevation, slim audit strip; 1280+375px 0-overflow 0-errors, unit PASS; backend untouched
 
 ## Current Phase
 **Phase 1 — Steady Live** — **Gates 1-5 Re-verified 2026-09-03, 13 unit tests PASS, app shell live :5173 (real SDK via esm.sh, warm paper, no purple glow), lib/dreamdex + lib/steady complete**

@@ -165,3 +165,12 @@ If interrupted, verify: `npm run validate` then `npm run validate:write` (should
 - npm run build → mkdir -p dist && cp -r app/* dist/ (static, no bundling, esm.sh CDN) — success dist 52K
 - Smoke test dist http://localhost:5174/ 200, no secrets in dist (grep TEST_WALLET_PRIVATE_KEY 0 hits)
 - Not yet deployed to Vercel (requires manual vercel --prod), but build is Vercel-ready static
+
+## Frontend hierarchy pass (2026-09-06, branch frontend-hierarchy-pass — video audit vs cairnsui.vercel.app)
+- Trigger: screen recording (`Recording 2026-09-06 161139.mp4`) showed Steady terminal reading as unstructured slop next to Cairn's disciplined hierarchy.
+- Fixes, all presentation-only — `lib/`, `scripts/`, order construction untouched:
+  - Ticket: `#ticketCta` replaces dead dash-matrix until window + max loss present; auto-select soonest live window (read-only); blocks split by `.ticket-div` rules; `.ticket-rows[hidden]{display:none}` (author `display:grid` beat UA hidden).
+  - Positions: qty `/1000`→`/1e6` (was 1000× vs ticket); fills grouped under one market header; `Action`→`Expiry`, `Qty`→`Contracts` honest labels.
+  - Type: sentence-case in-ticket labels (uppercase kept for eyebrows); `.ticket-featured` elevation; denser discovery rows; slim audit strip.
+  - Auxlo verdict: `md.auxlo.xyz/docs` is a URL-to-Markdown API, not a UI kit — not applicable.
+- Verified on branch: `node --check` OK, unit PASS, Playwright chromium 1280+375: 0px overflow, CTA-visible/rows-hidden default, 0 pageerrors.

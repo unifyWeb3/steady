@@ -65,48 +65,59 @@
       </div>
     </section>
 
-    <!-- B. HONEST TICKET -->
-    <section id="ticket" class="surface ticket" style="padding:16px;display:grid;gap:12px;align-self:start" aria-label="Honest ticket">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <h2 class="h2">Honest ticket</h2>
-        <span class="badge">IOC · type 2</span>
-      </div>
-      <div id="ticketMarket" class="caption" style="min-height:18px">Select a market →</div>
+    <!-- B. HONEST TICKET (THE SIGNATURE PRODUCT OBJECT) -->
+    <section id="ticket" class="surface ticket ticket-featured" style="padding:0;display:grid;gap:0;align-self:start" aria-label="Honest ticket">
+      <div class="ticket-block">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h2 class="h2">Honest ticket</h2>
+          <span class="badge badge-solid">IOC · type 2</span>
+        </div>
+        <div id="ticketMarket" class="ticket-market-line mono" style="min-height:18px">Select a market →</div>
 
-      <div style="display:grid;gap:8px">
-        <label class="caption" for="maxLoss">Max loss (tUSDC) — capped downside</label>
-        <input id="maxLoss" class="input input-lg mono" type="number" min="0.1" step="0.1" placeholder="25.0" inputmode="decimal"/>
-        <div class="caption">One lot = 1000 raw · Tick 1000 = 0.001 · 6 decimals</div>
+        <div style="display:grid;gap:6px">
+          <label class="ticket-field-label" for="maxLoss">Max loss (tUSDC) — capped downside</label>
+          <input id="maxLoss" class="input input-lg mono" type="number" min="0.1" step="0.1" placeholder="25.0" inputmode="decimal"/>
+          <div class="ticket-hint">One lot = 1000 raw · Tick 1000 = 0.001 · 6 decimals</div>
+        </div>
+
+        <div class="ticket-risk" aria-live="polite">
+          <span class="ticket-field-label">Max loss — decide on this number</span>
+          <span class="risk-num" id="riskNum">—</span>
+          <span class="ticket-hint" id="riskSub">Enter max loss + pick a window</span>
+        </div>
+
+        <!-- CTA replaces the dead dash matrix until a window is picked AND max loss entered -->
+        <div id="ticketCta" class="ticket-cta">
+          <div class="ticket-cta-title">Pick a live window to price this ticket</div>
+          <div class="ticket-cta-sub">Live bid/ask, spread and expiry appear here — no invented numbers.</div>
+        </div>
+        <div class="ticket-rows" id="ticketRows" hidden>
+          <div class="ticket-row"><span class="k">Pay → win</span><span class="v" id="previewPay">—</span></div>
+          <div class="ticket-row"><span class="k">Profit · contracts</span><span class="v" id="previewWin">—</span></div>
+          <div class="ticket-row"><span class="k">Entry · expiry · spread</span><span class="v" id="previewExpiry">—</span></div>
+          <div class="ticket-row"><span class="k">Book</span><span class="v" id="previewBook">—</span></div>
+          <div class="ticket-row" id="previewCappedRow" style="display:none"><span class="k">Policy state</span><span class="v" id="previewCapped">—</span></div>
+        </div>
       </div>
 
-      <div class="ticket-risk" aria-live="polite">
-        <span class="caption">Max loss — decide on this number</span>
-        <span class="risk-num" id="riskNum">—</span>
-        <span class="caption" id="riskSub">Enter max loss + pick a window</span>
-      </div>
+      <hr class="ticket-div"/>
 
-      <div class="ticket-rows">
-        <div class="ticket-row"><span class="k">Pay → win</span><span class="v" id="previewPay">—</span></div>
-        <div class="ticket-row"><span class="k">Profit · contracts</span><span class="v" id="previewWin">—</span></div>
-        <div class="ticket-row"><span class="k">Entry · expiry · spread</span><span class="v" id="previewExpiry">—</span></div>
-        <div class="ticket-row"><span class="k">Book</span><span class="v" id="previewBook">—</span></div>
-        <div class="ticket-row" id="previewCappedRow" style="display:none"><span class="k">Capped by</span><span class="v" id="previewCapped">—</span></div>
-      </div>
+      <div class="ticket-block">
+        <div class="side-toggle" role="group" aria-label="Direction">
+          <button id="buyYes" class="btn btn-up">Buy UP</button>
+          <button id="buyNo" class="btn btn-down">Buy DOWN</button>
+        </div>
 
-      <div class="side-toggle" role="group" aria-label="Direction">
-        <button id="buyYes" class="btn btn-up">Buy UP</button>
-        <button id="buyNo" class="btn btn-down">Buy DOWN</button>
-      </div>
+        <label class="checkline"><input type="checkbox" id="confirmBox"/><span>I understand my max loss is capped and this is an IOC — it fills what crosses and cancels the rest.</span></label>
 
-      <label class="checkline"><input type="checkbox" id="confirmBox"/><span>I understand my max loss is capped and this is an IOC — it fills what crosses and cancels the rest.</span></label>
-
-      <div id="tiltGuard" class="cooldown" style="display:none" role="alert">
-        <div class="co-head"><span class="co-title">Cooldown active</span><span class="co-timer" id="tiltCountdown">3:00</span></div>
-        <div class="co-sub" id="tiltMsg">2 consecutive losses. Trading resumes shortly.</div>
+        <div id="tiltGuard" class="cooldown" style="display:none" role="alert">
+          <div class="co-head"><span class="co-title">Cooldown active</span><span class="co-timer" id="tiltCountdown">3:00</span></div>
+          <div class="co-sub" id="tiltMsg">2 consecutive losses. Trading resumes shortly.</div>
+        </div>
+        <div id="execStatus" class="alert" style="display:none" role="status"></div>
+        <div id="tradeReceipt" class="receipt" style="display:none"></div>
+        <div class="ticket-footnote">Expire now+120s capped at marketExpiry−10s · nanos · tick-snapped · 60 gwei / 10M gas (SDK default)</div>
       </div>
-      <div id="execStatus" class="alert" style="display:none" role="status"></div>
-      <div id="tradeReceipt" class="receipt" style="display:none"></div>
-      <div class="caption">Expire now+120s capped at marketExpiry−10s · nanos · tick-snapped · 60 gwei / 10M gas (SDK default)</div>
     </section>
   </div>
 
@@ -135,8 +146,8 @@
     <div id="scoreDetail" class="caption"></div>
   </section>
 
-  <!-- C. POSITIONS -->
-  <section id="positions" class="surface" style="overflow:hidden" aria-label="Positions">
+  <!-- C. POSITIONS (supporting ledger — sits below the ticket) -->
+  <section id="positions" class="surface panel-quiet" style="overflow:hidden" aria-label="Positions">
     <div class="panel-head">
       <h2 class="h2">Positions — what do you hold, what can you do next?</h2>
       <button id="redeemAll" class="btn btn-secondary btn-sm">Redeem claimable</button>
@@ -152,17 +163,17 @@
     </div>
     <div class="tablewrap" style="border-top:0;margin-top:0">
       <table class="table" id="posTable">
-        <thead><tr><th>Market</th><th>Side</th><th class="num">Fill price</th><th class="num">Qty</th><th>State</th><th>Tx</th><th>Action</th></tr></thead>
+        <thead><tr><th>Market</th><th>Side</th><th class="num">Fill price</th><th class="num">Contracts</th><th>State</th><th>Tx</th><th class="num">Expiry</th></tr></thead>
         <tbody id="posTbody"><tr><td colspan="7" class="empty"><div class="title">Connect wallet to see positions.</div><div class="body">Fills, lifecycle, and redemption appear here — no simulated rows.</div></td></tr></tbody>
       </table>
     </div>
   </section>
 
-  <!-- E. SETTLEMENT / AUDIT -->
-  <section id="settlement" class="surface" style="padding:16px;display:grid;gap:10px" aria-label="Settlement and redemption">
-    <h2 class="h2">Settlement &amp; redemption</h2>
-    <div class="caption">Market → resolution → outcome → oracle reference → transaction evidence. Void pays 0.5 per side.</div>
-    <div id="settlementList" style="display:grid;gap:8px"><div class="empty"><div class="title">No settled positions yet</div><div class="body">After a market locks, redemption is a Finalized scan (not the live list) plus ERC-6909 balances.</div></div></div>
+  <!-- E. SETTLEMENT / AUDIT (slim strip until Finalized results exist) -->
+  <section id="settlement" class="surface panel-quiet" style="padding:14px 16px;display:grid;gap:8px" aria-label="Settlement and redemption">
+    <h2 class="h2" style="font-size:16px">Settlement &amp; redemption</h2>
+    <div class="ticket-hint">Market → resolution → outcome → oracle reference → transaction evidence. Void pays 0.5 per side.</div>
+    <div id="settlementList" style="display:grid;gap:8px"><div class="empty empty-slim"><div class="title">No settled positions yet</div><div class="body">After a market locks, redemption is a Finalized scan (not the live list) plus ERC-6909 balances.</div></div></div>
   </section>
 
   <footer class="caption" style="text-align:center;padding:20px 0 8px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
