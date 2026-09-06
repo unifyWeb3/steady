@@ -1,6 +1,6 @@
 # Implementation Status — Steady
 
-Last updated: 2026-09-06 — RELEASE: prod https://somnia-snowy.vercel.app LIVE + smoke PASS (4 views, 0 errors); README+LICENSE+FEEDBACK+demo.md+demo-editing; honest 74/100; remaining: popup hash, video, public flip, BUIDL
+Last updated: 2026-09-06 — FRONTEND HIERARCHY PASS (video audit vs cairnsui): ticket CTA replaces 4-dash dead state + auto-select first window + 3-block regroup, positions qty /1000→/1e6 + grouped by market + Action→Expiry, sentence-case ticket labels, featured ticket elevation, slim audit strip; 1280+375px 0-overflow 0-errors, 13/13 unit; backend untouched (no lib/scripts order-path changes)
 
 ## Current Phase
 **Phase 1 — Steady Live** — **Gates 1-5 Re-verified 2026-09-03, 13 unit tests PASS, app shell live :5173 (real SDK via esm.sh, warm paper, no purple glow), lib/dreamdex + lib/steady complete**
@@ -126,3 +126,10 @@ npm run validate   # re-verify reads before UI work
 - Do not put private key in `NEXT_PUBLIC_*` or commit `.env`
 - Do not mock fills/hashes — every hash above is mined on Shannon 50312
 - Do not hardcode pool/market/venue addresses
+
+## Backend track — WalletClient redemption (2026-09-06, no `app/` edits)
+- `lib/dreamdex/redemption.ts` rebased on verified `getClaimable` → `redeemMany` (one tx; `walletClient` + `privateKey` both supported); legacy single-market path fixed to module-routed `redeem`.
+- `lib/steady/positionState.ts` NEW — pure fill→`LIVE|SETTLING|CLAIMABLE|WON|LOST|VOID` resolver (tab-compatible only); wiring contract for frontend in `research/61-walletclient-redemption.md`.
+- Harness **Gate 6** NEW (`getClaimable` read-only): PASS 2026-09-06 — 3 real claimables on funded wallet (2005000000/1243000/1000 raw, Finalized), deliberately NOT redeemed (demo camera).
+- Tests **29/29 PASS** (was 13): +10 positionState, +6 redemption shapers. `npm run validate` gates 1-4 + 6 PASS; `npm run build` OK (dist 96K).
+- New windows observed live: 4h/1d/45d BTC/ETH — filters unchanged (frontend call).

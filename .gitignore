@@ -19,3 +19,14 @@ Thumbs.db
 *.log
 npm-debug.log*
 .vercel
+
+# demo video + raw recordings — NEVER commit (54MB+ bloat).
+# Upload final cut to YouTube/Loom, link in README + BUIDL submission.
+*.mp4
+*.mov
+*.webm
+Recording*/
+
+# test artifacts
+test-results/
+playwright-report/

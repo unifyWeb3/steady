@@ -175,6 +175,25 @@ async function main() {
 
   console.log("\n=== Read gates 1-4 PASSED ===");
 
+  // 6. getClaimable (read-only) — proves the redemption scan path without spending.
+  // With a funded key we scan the real wallet; otherwise the zero address (expects []).
+  try {
+    const scanAccount = (PRIVATE_KEY && PRIVATE_KEY.startsWith("0x") && PRIVATE_KEY.length === 66)
+      ? privateKeyToAccount(PRIVATE_KEY).address
+      : "0x0000000000000000000000000000000000000000";
+    const claimable = await exchange.client.getClaimable(scanAccount);
+    const rows = Array.isArray(claimable) ? claimable : [];
+    logGate("Gate 6 — getClaimable scan", true, `${rows.length} claimable for ${scanAccount.slice(0, 10)}...`);
+    for (const c of rows.slice(0, 5)) {
+      console.log(`  • market ${(c.marketId ?? "?").toString().slice(0, 10)}... outcome=${c.outcomeIdx} amount=${c.amount} estPayout=${c.estPayout} status=${c.status}`);
+    }
+    if (rows.length === 0) console.log("  → nothing claimable — redeemMany must no-op (entries []), not throw");
+  } catch (e) {
+    logGate("Gate 6 — getClaimable scan", false, e?.message || String(e));
+    console.error(e);
+    process.exit(1);
+  }
+
   if (!WANT_WRITE) {
     console.log("\nWrite gate 5 SKIPPED — run with `npm run validate:write` and TEST_WALLET_PRIVATE_KEY to test real IOC");
     if (!PRIVATE_KEY) console.log("  (no TEST_WALLET_PRIVATE_KEY in env)");

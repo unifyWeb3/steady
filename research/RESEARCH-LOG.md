@@ -115,3 +115,9 @@
 - Fresh intel: Tock live+breathed (proof/MCP/rides), PredicTrader live (ensemble+copy), Dungeon HAS VIDEO + mainnet, Agent verified contract. Rivo unverified rumor. Adopted: receipt share-card (text+link only).
 - Honest score 73 → ~80 with video + manual E2E. No scope added; P1 hygiene (debug gate, preview relabel, lot caption, side-aware preview) applied and verified (APP_OK, 13/13, 5/5 browser).
 - Secrets re-PASS. No DB justified (48). No gimmicks found (49).
+
+## 2026-09-06 — WalletClient redemption backend (61)
+- Verified: `getClaimable` → `redeemMany` one-tx close-out, `createTrader({walletClient})` for popup redeem, module-routed `redeem`, MarketStatus enum + `winningOutcome`-only-when-`isResolved` (all d.ts refs in 61).
+- Live: Gate 6 PASS — 3 real claimables on funded wallet (2005000000/1243000/1000 raw, Finalized). NOT redeemed (saved for demo camera).
+- New intel: 4h/1d/45d BTC/ETH windows now listed (Gate 2); filters still 60/300/900/3600 — frontend call to surface 4h/1d.
+- Suite 13 → 29/29 PASS. No scope added; no `app/` edits (frontend session owns wiring per contract in 61).
