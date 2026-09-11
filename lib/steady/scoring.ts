@@ -1,5 +1,6 @@
 // lib/steady/scoring.ts — Brier + Edge pure, no SDK
 // Must return "insufficient history" honestly
+import { computeScore as computeScoreBrowser, brierLabel as brierLabelBrowser } from "./scoring.js";
 
 export type SettledCall = {
   priceProb: number; // entry price 0..1 (paid price per contract)
@@ -20,52 +21,9 @@ export type Score = {
 };
 
 export function computeScore(calls: SettledCall[], minN: number = 5): Score {
-  const settled = calls.filter((c) => !c.void);
-  const n = settled.length;
-  const sufficient = n >= minN;
-  if (!sufficient) {
-    return {
-      n,
-      wins: settled.filter((c) => c.won).length,
-      losses: settled.filter((c) => !c.won).length,
-      brier: null,
-      edge: null,
-      winRate: null,
-      avgPrice: null,
-      sufficient: false,
-      last5: settled.slice(-5).map((c) => c.won),
-    };
-  }
-  let brierSum = 0;
-  let priceSum = 0;
-  let wins = 0;
-  for (const c of settled) {
-    const outcome = c.won ? 1 : 0;
-    brierSum += (c.priceProb - outcome) ** 2;
-    priceSum += c.priceProb;
-    if (c.won) wins++;
-  }
-  const brier = brierSum / n;
-  const avgPrice = priceSum / n;
-  const winRate = wins / n;
-  const edge = winRate - avgPrice;
-  return {
-    n,
-    wins,
-    losses: n - wins,
-    brier,
-    edge,
-    winRate,
-    avgPrice,
-    sufficient: true,
-    last5: settled.slice(-5).map((c) => c.won),
-  };
+  return computeScoreBrowser(calls, minN) as Score;
 }
 
 export function brierLabel(brier: number | null): string {
-  if (brier === null) return "Need 5 settled";
-  if (brier < 0.15) return "Sharp";
-  if (brier < 0.25) return "Steady";
-  if (brier < 0.33) return "Drifting";
-  return "Tilting";
+  return brierLabelBrowser(brier);
 }

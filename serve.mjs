@@ -1,13 +1,20 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-const root = path.resolve('./app');
+const roots = {
+  '/': path.resolve('./app'),
+  '/lib': path.resolve('./lib'),
+};
 const mime = { '.html':'text/html', '.css':'text/css', '.js':'text/javascript', '.json':'application/json', '.png':'image/png', '.svg':'image/svg+xml' };
 const s=http.createServer((req,res)=>{
-  let p = req.url.split('?')[0];
+  let p = decodeURIComponent(req.url.split('?')[0]);
   if(p==='/') p='/index.html';
-  const file = path.join(root, p);
-  if(!file.startsWith(root)) { res.writeHead(403); return res.end(); }
+  const mount = p === '/lib' || p.startsWith('/lib/') ? '/lib' : '/';
+  const relative = mount === '/lib' ? p.slice('/lib'.length) : p;
+  const root = roots[mount];
+  const file = path.resolve(root, `.${relative}`);
+  if(file !== root && !file.startsWith(`${root}${path.sep}`)) { res.writeHead(403); return res.end(); }
+  if (mount === '/lib' && path.extname(file) !== '.js') { res.writeHead(404); return res.end('not found '+p); }
   if(!fs.existsSync(file)){ res.writeHead(404, {'Content-Type':'text/plain'}); return res.end('not found '+p); }
   const ext=path.extname(file);
   res.writeHead(200, {'Content-Type': mime[ext]||'text/plain', 'Access-Control-Allow-Origin':'*', 'Cache-Control':'no-cache'});

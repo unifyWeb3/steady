@@ -1,14 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-function computeScore(calls, minN=5){
-  const settled = calls.filter(c=>!c.void);
-  const n=settled.length, sufficient=n>=minN;
-  if(!sufficient) return { n, sufficient:false, brier:null, edge:null };
-  let brierSum=0, priceSum=0, wins=0;
-  for(const c of settled){ brierSum+=(c.priceProb-(c.won?1:0))**2; priceSum+=c.priceProb; if(c.won) wins++; }
-  const brier=brierSum/n, avg=priceSum/n, winRate=wins/n, edge=winRate-avg;
-  return { n, brier, edge, winRate, avg, sufficient:true };
-}
+import { computeScore, outcomeProbabilityFromYesPrice, settledCallFromFill } from "../../lib/steady/scoring.js";
 describe("scoring", ()=>{
   it("needs 5", ()=>{
     const s=computeScore([{priceProb:0.6,won:true},{priceProb:0.6,won:false}]);
@@ -30,5 +22,36 @@ describe("scoring", ()=>{
     const c=[{priceProb:0.6,won:true},{priceProb:0.6,won:true},{priceProb:0.6,won:true},{priceProb:0.6,won:true},{priceProb:0.6,won:false}]; // winRate 0.8 vs avg 0.6 => edge 0.2
     const s=computeScore(c);
     assert.equal(s.edge.toFixed(2),"0.20");
+  });
+  it("orients BUY_NO from YES-term fill prices", ()=>{
+    assert.equal(outcomeProbabilityFromYesPrice(250000n, "BUY_YES"), 0.25);
+    assert.equal(outcomeProbabilityFromYesPrice(250000n, "BUY_NO"), 0.75);
+  });
+
+  it("computes explicit UP Brier and Edge from the traded outcome probability", () => {
+    const calls = [
+      settledCallFromFill({ fillPriceRaw: 800000n, side: "BUY_YES", won: true }),
+      settledCallFromFill({ fillPriceRaw: 700000n, side: "BUY_YES", won: true }),
+      settledCallFromFill({ fillPriceRaw: 600000n, side: "BUY_YES", won: false }),
+      settledCallFromFill({ fillPriceRaw: 400000n, side: "BUY_YES", won: false }),
+      settledCallFromFill({ fillPriceRaw: 900000n, side: "BUY_YES", won: true }),
+    ];
+    const score = computeScore(calls);
+    assert.equal(score.brier.toFixed(3), "0.132");
+    assert.equal(score.edge.toFixed(3), "-0.080");
+  });
+
+  it("computes explicit DOWN Brier and Edge after inverting YES-term fills", () => {
+    const calls = [
+      settledCallFromFill({ fillPriceRaw: 200000n, side: "BUY_NO", won: true }),
+      settledCallFromFill({ fillPriceRaw: 300000n, side: "BUY_NO", won: true }),
+      settledCallFromFill({ fillPriceRaw: 400000n, side: "BUY_NO", won: false }),
+      settledCallFromFill({ fillPriceRaw: 600000n, side: "BUY_NO", won: false }),
+      settledCallFromFill({ fillPriceRaw: 100000n, side: "BUY_NO", won: true }),
+    ];
+    const score = computeScore(calls);
+    assert.equal(calls[0].priceProb, 0.8);
+    assert.equal(score.brier.toFixed(3), "0.132");
+    assert.equal(score.edge.toFixed(3), "-0.080");
   });
 });

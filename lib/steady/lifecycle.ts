@@ -1,7 +1,7 @@
 // lib/steady/lifecycle.ts — map protocol → product inbox states
-import { STATUS_MAP } from "../dreamdex/settlement";
+import { STATUS_MAP } from "../dreamdex/settlement.ts";
 
-export type SteadyPositionState = "LIVE" | "LOCKED" | "SETTLING" | "CLAIMABLE" | "WON" | "LOST" | "VOID" | "REDEEMED";
+export type SteadyPositionState = "LIVE" | "LOCKED" | "SETTLING" | "CLAIMABLE" | "WON" | "LOST" | "VOID" | "REDEEMED" | "UNKNOWN";
 
 export function mapLifecycle(status: number, hasClaimableBalance?: boolean, isRedeemed?: boolean): SteadyPositionState {
   if (isRedeemed) return "REDEEMED";
@@ -11,7 +11,7 @@ export function mapLifecycle(status: number, hasClaimableBalance?: boolean, isRe
   if (proto === "LOCKED") return "SETTLING"; // awaiting settlement
   if (proto === "TRADING") return "LIVE";
   if (proto === "LISTED") return "LIVE";
-  return "SETTLING";
+  return "UNKNOWN";
 }
 
 export function isEligibleForRedeem(status: number, hasPositiveBalance: boolean): boolean {

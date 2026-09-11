@@ -21,8 +21,8 @@
       <a href="https://docs.dreamdex.io/developers/event-contracts" target="_blank" rel="noopener">Docs ↗</a>
       <a href="https://shannon-explorer.somnia.network" target="_blank" rel="noopener">Explorer ↗</a>
     </nav>
-    <div style="display:flex;gap:8px;align-items:center">
-      <a class="btn btn-primary btn-sm" href="./terminal.html">Open terminal</a>
+    <div class="header-cta">
+      <a class="btn btn-secondary btn-sm" href="./terminal.html">Open terminal</a>
     </div>
   </div>
 </header>
@@ -37,14 +37,14 @@
         <p class="lede">Prediction markets make the <em>click</em> easy. Steady makes the <em>decision</em> accountable — max loss first, policy-checked execution, verifiable fills, and a pause when you start chasing.</p>
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
           <a class="btn btn-primary btn-lg" href="./terminal.html">Open the terminal</a>
-          <a class="btn btn-secondary btn-lg" href="#how">How it works</a>
+          <a class="text-link" href="#how">How it works <span aria-hidden="true">↓</span></a>
         </div>
         <div class="caption">Testnet only · No mocks · Every hash below is mined on Shannon 50312</div>
       </div>
-      <div class="surface" style="overflow:hidden" aria-label="Honest ticket preview">
+      <div class="surface home-preview" style="overflow:hidden" aria-label="Illustrative honest ticket preview">
         <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <span class="caption">Honest ticket — preview</span>
-          <span class="badge badge-live"><span class="dot"></span>Live logic</span>
+          <span class="caption">Honest ticket — illustrative</span>
+          <span class="badge badge-quiet">Example only</span>
         </div>
         <div style="padding:16px;display:grid;gap:12px">
           <div class="ticket-risk">
@@ -63,7 +63,8 @@
       </div>
     </div>
     <div class="proof-strip">
-      <span class="badge badge-live"><span class="dot"></span>Live proof</span>
+      <span class="badge badge-up">Historical live proof</span>
+      <span class="proof-provenance">Verified 2026-09-03 · Shannon 50312</span>
       <span class="kv">IOC <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/0xed05c90f6426b096d63c6ee2edd3d8aa201e94080d7454bf2215add29c72464c" target="_blank" rel="noopener">0xed05c…72464c</a> quoted 0.049 → fill 0.021 · redeem <a class="hashlink" href="https://shannon-explorer.somnia.network/tx/0x3aa5ec79dc9542633545645b540ec9d45c5a470ea86d8c8eb33054cbc1e77444" target="_blank" rel="noopener">0x3aa5ec…77444</a></span>
       <a class="btn btn-secondary btn-sm" href="./terminal.html">Verify in terminal</a>
     </div>
@@ -109,9 +110,9 @@
     <div class="eyebrow">Discipline</div>
     <div class="h1">Discipline, not dopamine.</div>
     <div class="trio">
-      <div class="surface" style="padding:16px;display:grid;gap:8px"><div class="caption">Explicit downside</div><div style="font-weight:600">Max loss is the largest number on the ticket — not the price.</div><div class="small">One input. The system reads book, tick, lot, and balance, then tells you the consequence.</div></div>
-      <div class="surface" style="padding:16px;display:grid;gap:8px"><div class="caption">Cooldown</div><div style="font-weight:600">2 consecutive losses → 3-minute block at the execution boundary.</div><div class="small">Not a warning banner. The Buy buttons disable and the timer counts down.</div></div>
-      <div class="surface" style="padding:16px;display:grid;gap:8px"><div class="caption">Calibration</div><div style="font-weight:600">Brier &lt; 0.25 is Steady. Edge = win rate − avg price.</div><div class="small">Needs 5 settled calls. Until then Steady shows “—” honestly instead of inventing skill.</div></div>
+      <div class="discipline-item"><div class="caption">Explicit downside</div><div style="font-weight:600">Max loss is the largest number on the ticket — not the price.</div><div class="small">One input. The system reads book, tick, lot, and balance, then tells you the consequence.</div></div>
+      <div class="discipline-item"><div class="caption">Cooldown</div><div style="font-weight:600">2 consecutive losses → 3-minute block at the execution boundary.</div><div class="small">Not a warning banner. The Buy buttons disable and the timer counts down.</div></div>
+      <div class="discipline-item"><div class="caption">Calibration</div><div style="font-weight:600">Brier &lt; 0.25 is Steady. Edge = win rate − avg price.</div><div class="small">Needs 5 settled calls. Until then Steady shows “—” honestly instead of inventing skill.</div></div>
     </div>
     <div class="cooldown" style="max-width:720px">
       <div class="co-head"><span class="co-title">Cooldown active</span><span class="co-timer">02:31</span></div>
@@ -126,7 +127,7 @@
   <section id="proof" class="section" style="display:grid;gap:20px">
     <div class="eyebrow">Verification</div>
     <div class="h1">Every trade leaves a trail.</div>
-    <p class="lede" style="margin:0">Default: “Trade completed.” Then <em>View proof</em> — quoted vs actual, quantity, max loss, expiry, policy, transaction, fill, position, settlement, redemption.</p>
+    <p class="lede" style="margin:0">Default: show the mined fill state. Then <em>View proof</em> — quoted vs actual, quantity, max loss, expiry, policy, transaction, fill, position, settlement, redemption.</p>
     <div class="surface" style="overflow:hidden;max-width:860px">
       <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
         <span class="caption">Trade receipt — example</span>
@@ -142,7 +143,7 @@
         <div class="prow"><span class="k">Block / status</span><span class="v">477265538 · success</span></div>
       </div>
     </div>
-    <div class="small">No fake metrics. No fake users. No fake testimonials. No simulated fills. Proof or it didn't happen.</div>
+    <div class="small">Historical evidence only. No fake metrics, users, testimonials, or simulated fills.</div>
   </section>
 
   <hr class="rule"/>

@@ -219,3 +219,115 @@ If interrupted, verify: `npm run validate` then `npm run validate:write` (should
 - Causes: indexer 504 (no fallback) + BUY_NO over-cross misprice + half-connected wallet + cached SDK failure + missing timeouts + decorative balance gate. All fixed in `app.js`; `crossingYesPriceForSide` added to lib + 5 pricing tests (34/34).
 - Browser proof during outage: on-chain fallback found all 3 claimables → redeemMany attempted → blocked only by mock signing. Real wallet = one popup away.
 - Repo now PUBLIC. Indexer still 504 at last check — re-run `npm run validate` when green, then record.
+
+## P0 correctness hardening — 2026-09-08
+
+Scope was limited to correctness/security/reconciliation; no visual redesign or deployment work.
+
+- `app/trade-intent.js` is now imported by `app/app.js` and is the canonical policy/math boundary for both preview and execution. BUY_UP and BUY_DOWN use side-specific liquidity and economics; execution rebuilds the intent from fresh params/book/status before signing.
+- Discovery is fail-closed: only markets with verified on-chain status `1` are displayed and cached. Status read failures render an unverified/retry state.
+- Receipt rendering distinguishes `FILL VERIFIED` from a mined `NO FILL` IOC. A zero-fill transaction is never described as a completed trade.
+- Redemption distinguishes complete-empty scans from incomplete/partial scans. An incomplete scan renders `Claims unavailable` and does not claim that nothing is claimable.
+- Added regression coverage in `tests/unit/trade-intent.test.mjs` for side economics, fresh spread, status/lock, empty-side liquidity, zero-fill receipts, and incomplete claim scans.
+
+Verification on 2026-09-08: `npm test` 40/40 PASS; `npm run build` PASS; Playwright `tests/e2e` 6/6 PASS; `node --check app/app.js` PASS. `npm run validate` reached Gate 1 but Gate 2 is currently blocked by DNS `EAI_AGAIN dev.smk.somnia.host`; historical live IOC/redemption evidence remains unchanged and is not re-dated by this failed read.
+
+P0 phase complete. Do not claim a new live Gate 2 pass, browser popup signature, or fresh settlement/redemption transaction until independently observed.
+
+## Cairn-informed terminal hierarchy pass — 2026-09-08
+
+Presentation-only follow-up requested after P0. The terminal now uses a clear `Discover → Decide → Control → Prove` stage rail, an authored masthead, a dominant Honest Ticket, quieter discovery/ledger surfaces, and a dark execute/proof band. Mobile grid order follows the same task sequence instead of exposing the positions ledger before the ticket. Live, checking, and status-unavailable health states are visually distinct.
+
+No protocol code or historical evidence was modified. Screenshots: `test-results/terminal-desktop.png`, `test-results/terminal-mobile-375.png`, `test-results/minimal.png`. Full browser suite: 6/6 PASS. Cairn itself was not reachable from this environment (`Could not resolve host: cairnsui.vercel.app`); `research/40-cairn-ui-teardown.md`, `41-dashboard-reconstruction.md`, and `42-visual-review.md` remain the local reference.
+
+## P0 strict-audit closure — 2026-09-08
+
+Implemented remaining correctness/reconciliation items without redesign or deployment: pure `buildIocOrder`; status → fresh book → status recheck → params → intent execution; explicit book/status denial; stale selection clearing; `UNKNOWN` position state; and bounded redemption fallback evidence. Verification: 43/43 unit, build, syntax, and Playwright 6/6 pass. `npm run validate` Gate 1 PASS, Gate 2 FAIL with `EAI_AGAIN dev.smk.somnia.host`; `dig` resolved `8.233.178.19`, RPC returned `0xc488`, and `listPastBinaryMarkets` is confirmed indexer-backed. No fresh live protocol evidence is claimed. Reviewed IACTA/Deltr/Veyctum/Crucible/LENS for principles only; no external code imported. See `research/65-final-release-blockers.md` and `research/66-p1-implementation-plan.md`.
+
+## Lifecycle unknown-state alignment — 2026-09-09
+
+The standalone `lib/steady/lifecycle.ts` mapper now returns `UNKNOWN` for protocol statuses outside the verified `STATUS_MAP`, matching the active browser position resolver and fail-closed P0 contract. Added a focused regression test. No live protocol evidence changed.
+
+## Late-receipt fill reconciliation — 2026-09-09
+
+The timeout-reconciliation path now distinguishes a recovered transaction receipt from fill proof. It queries `getUserFills` scoped to the exact market and transaction, reports `FILL VERIFIED` only for positive matched quantity, and leaves indexer-lag/no-match cases as `FILL UNKNOWN`. Added pure regression coverage. Current local suite: 48/48; no live protocol evidence changed.
+
+## P0 verification report — 2026-09-09
+
+- Completed the requested code/test audit in `research/67-p0-verification.md`.
+- All five approved P0 fixes are locally PASS: side-aware DOWN economics, fresh-book authorization, status-1 fail-closed gating, zero-fill/late-fill semantics, and incomplete redemption scan handling.
+- Verification: `npm test` 48/48, `npm run build`, `node --check app/app.js`, `git diff --check`, and Playwright 6/6 PASS.
+- `npm run validate` is currently BLOCKED at Gate 2 after Gate 1 with `getaddrinfo EAI_AGAIN dev.smk.somnia.host`; no fresh live market, fill, settlement, or redemption evidence is claimed. Historical hashes remain historical.
+
+## P1 architectural/release hardening — 2026-09-09
+
+- Canonical browser-safe modules are served from `/lib/steady/` and `/lib/config/`; the app imports shared trade intent, scoring, position state, DOM safety, redemption state, and browser configuration. The old `app/trade-intent.js` path is only a compatibility re-export.
+- BUY_NO Brier/Edge uses outcome probability `1 - YES fillPrice` for BUY_NO. Redemption uses a single-flight state machine and does not emit `REDEEMED` until a complete post-receipt claim scan confirms zero remaining claims.
+- External values used in templates are escaped; transaction URLs require a full 32-byte hash. Discovery, selection, fills, scoring, and redemption have request-generation guards so stale completions cannot overwrite current state.
+- The indexer incident is documented in `research/68-indexer-incident.md`; no raw-IP or production-indexer substitution was introduced. Direct shaped GraphQL probes responded on 2026-09-09, but `npm run validate` still failed at Gate 2 with SDK DNS `EAI_AGAIN`; this remains a live verification blocker.
+- P1 verification is in `research/69-p1-verification.md`: local implementation/test items PASS, live Gate 2 BLOCKED. Current local checks: 12 unit test files / 60 cases, build, syntax, diff check, Playwright 6/6.
+
+Verification refresh 2026-09-09 19:44 WAT: direct DNS resolved `8.233.178.19`, HTTPS `HEAD` returned 500, and shaped GraphQL probes returned `query_root` plus one `Market.id`; a 21:32 WAT JSON-RPC probe returned `0xc488` (`50312`). These direct responses do not upgrade the SDK Gate 2 result. The added redemption, scoring, and request-generation regressions are included in the 60-case local suite.
+
+Final exact-tree rerun 21:29 WAT: 60/60 unit cases, build, syntax, diff check, and Playwright 6/6 PASS. `npm run validate` again passed Gate 1 and failed Gate 2 with SDK DNS `EAI_AGAIN`; no fresh live evidence is claimed.
+
+Fresh gate disposition: Gate 1 PASS; Gate 2 BLOCKED; Gates 3–6 NOT RUN because the SDK harness stops at discovery. The 21:32 WAT RPC probe returned `0xc488` (`50312`) for chain identity only. Historical Gate 3–6 and transaction evidence remains historical.
+
+## Release-gate audit refresh — 2026-09-09
+
+- Frozen audit only: no frontend redesign, protocol edit, endpoint substitution, funded write, deployment, commit, or push.
+- Required local checks: 60/60 unit cases PASS; build PASS; `node --check app/app.js` PASS; `git diff --check` PASS.
+- Browser E2E: 6/6 PASS locally, including honest timeout recovery and 375px zero-overflow. Real MetaMask/Rabby signing remains human-unverified.
+- Current live disposition: two official `npm run validate` runs passed Gate 1 and failed Gate 2 with SDK `fetch failed` / Node `getaddrinfo EAI_AGAIN dev.smk.somnia.host`. Gates 3-6 were not run. A separate exact SDK call intermittently returned 16 rows, while direct DNS, curl GraphQL, and Chromium GraphQL probes also answered; this mixed evidence does not establish a stable Gate 2 pass. See `research/68-indexer-incident.md`.
+- Existing production `https://somnia-snowy.vercel.app`: home and terminal returned HTTP 200 and rendered at 1280px/375px without overflow or broken responses. Terminal market discovery degraded to the explicit timeout/unavailable state during smoke.
+- Confirmed UI defects: none. Safest next action: wait for stable indexer resolution, rerun `npm run validate` until the official read gate passes consistently, then perform the human wallet popup/read-back evidence session before deployment or funded writes.
+
+## Final frontend design audit — 2026-09-10
+
+Phase 1 is complete in `research/70-final-frontend-design-audit.md`.
+Baseline browser verification passed 6/6 against the local shell, with current
+indexer loading/unavailable behavior preserved and screenshots captured at
+1280, 768, 390, and 375px for both pages. The proposed next pass is visual only:
+off-white/deep-green tokens, clearer provenance/state grammar, tighter homepage
+hierarchy, independent desktop terminal columns, and explicit BUY_NO receipt
+terms. No fresh live protocol evidence was created.
+
+The approved frontend finishing pass is complete within the allowlist. It implemented the documented off-white/deep-green system and hierarchy in design.md, app/index.html, app/terminal.html, and app/style.css; added presentation-only BUY_NO receipt terminology and state styling in app/app.js; and extended tests/e2e/steady.spec.ts for four approved widths, lifecycle-tab clipping, exact NO-term receipt rows, and honest disconnected-wallet outcomes.
+
+Final screenshots: test-results/final-home-{1280,768,390,375}.png and test-results/final-terminal-{1280,768,390,375}.png. Review found zero page-level overflow at 1280, 768, 390, and 375px; the mobile stage rail is fully scannable; and all seven lifecycle filters remain visible at 390/375px. No protocol, SDK, order, policy, settlement, redemption, or scoring behavior was changed. Current network provenance remains honest: indexer/CDN loading is intermittent and the UI degrades to explicit loading/unavailable/retry states. No fresh live market, fill, settlement, or redemption evidence was created. Real MetaMask/Rabby popup signing remains human-unverified; no funded write, deployment, commit, push, or npm run validate:write was performed.
+
+
+## Final verification refresh - 2026-09-11
+
+- npm test: 60/60 PASS.
+- npm run build: PASS.
+- node --check app/app.js: PASS.
+- git diff --check: PASS.
+- Playwright: 8/8 PASS with one worker. The isolated minimal test passed on rerun after an earlier combined-run timeout; the complete rerun passed. Optional screenshot helper calls timed out in some runs, but assertions passed.
+- Existing server on port 5173 was reused because a second start returned EADDRINUSE. No new server or deployment was created.
+- Browser evidence remains local/test-proven only. The indexer/CDN path was intermittent and rendered explicit loading/unavailable states; no fresh live market, fill, settlement, redemption, or signing evidence was created.
+
+- Post-fix geometry probe: all 8 page/width combinations reported zero page overflow and zero clipped elements; the probe also found no page errors. The targeted mobile terminal header-nav fix tightened only the navlinks spacing/font sizing at narrow widths, removing a 1px Audit link overrun at 375px.
+- Refreshed screenshots were explicitly written and size-checked: final-home-1280.png (250601 bytes), final-home-768.png (258374 bytes), final-home-390.png (200713 bytes), final-home-375.png (193601 bytes), final-terminal-1280.png (187889 bytes), final-terminal-768.png (180698 bytes), final-terminal-390.png (174222 bytes), and final-terminal-375.png (175866 bytes).
+
+## Phase 3 hardening — 2026-09-11 (continuation, deadline 19:00 local)
+
+- Scope was D1–D9 only. No redesign, feature, protocol, backend, deploy, or funded write. Dirty worktree preserved; no revert/reset/clean/branch-switch/commit/push.
+- D1–D7 code verified already present in the worktree (partial-fill receipt with Requested/Filled/Remaining + FULL/PARTIAL states; fresh-balance-bound intent + policy proof; UNKNOWN post-receipt scan with verification-only retry; disabled controls with reasons; post-switch `eth_chainId` re-read; aggregate `DEPTH_INSUFFICIENT` fail-closed; stale-selection clearing). No `app/app.js` or domain edits were needed in this session.
+- One test fix: `tests/unit/lifecycle.test.mjs` imported `.ts` and failed on Node 18; re-pointed to shipped `lib/steady/position-state.js` with equivalent UNKNOWN/LIVE assertions. TS helper source-verified unchanged.
+- Verification: `npm test` 67/67 PASS; `npm run build` PASS; `node --check app/app.js` PASS; `git diff --check` PASS; Playwright 9/11 then 11/11 PASS on rerun (Node 22.22.3, server 5173 reused; mock wallet, no popup claim).
+- Fresh `npm run validate`: Gates 1–4 + 6 PASS (20 live, 4 steady-filtered, status 1, book 3/3, tick/lot/min 1000; 2 claimables observed, not redeemed). Write gate skipped. No EAI_AGAIN this run; no raw IP/mock/proxy.
+- D8: local `dist/` current (runtime-config present, 6 steady + config modules, NO-term + PARTIAL FILL wording, no secrets, no `Trade completed`). Prod `https://somnia-snowy.vercel.app` read-only smoke: `/` 200, `/terminal` 200 (15,983 bytes), `/runtime-config.js` 404, prod app.js 66,874 bytes with `Trade completed` and without current NO-term/depth wording — stale until authorized deploy.
+- Full defect/record detail: `research/PHASE-3-HARDENING-REPORT.md`. Verdict: READY WITH EXTERNAL BLOCKER (authorized deploy + human popup UP/DOWN + observed settlement/redemption still required). Historical hashes not re-dated.
+
+## Release checkpoint regression — 2026-09-11 15:00 UTC (pre-commit, no deploy / no funded writes)
+
+FRESH EVIDENCE (exact worktree verified before the release commit):
+
+- `npm test` 67/67 PASS (12 suites).
+- `npm run build` PASS (`dist/app.js` 87,183 bytes, `dist/runtime-config.js` present, 6 steady + config modules, PARTIAL FILL + Quoted NO present, obsolete `Trade completed` absent, no secrets).
+- `node --check app/app.js` PASS; `git diff --check` PASS.
+- Playwright 11/11 PASS (`tests/e2e`, one worker, 60s timeout, Node v22.22.3).
+- `npm run validate` first run, no retry: Gates 1-4 + 6 PASS. Gate 2 returned 20 live; Steady-filtered BTC/ETH 900/3600 >300s was 0 at 14:59 UTC because every window was near expiry (harness: not a failure). Trading market found via status search (0x...1a3a5 / pool 0xf0981caa..., status 1); book 5/5 levels (best yesBid 444000 / best yesAsk 514000); tick/lot/min 1000. Gate 6: 2 claimables observed, NOT redeemed. Write gate skipped. No EAI_AGAIN, mock, raw IP, or proxy.
+
+HISTORICAL EVIDENCE (unchanged, not re-dated): earlier live IOC, browser YES/NO, settlement, and redemption hashes remain as recorded above. No fresh transaction is claimed.

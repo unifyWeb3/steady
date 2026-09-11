@@ -23,26 +23,26 @@ Color in Steady exists solely to communicate semantic state, structure, or actio
 
 | Semantic Role | Token Name | Hex Value | Meaning & Context | Contrast Target |
 |---|---|---|---|---|
-| **Structure / Authority** | `--color-ink` | `#141210` | Header rails, primary text, max-loss risk typography, primary buttons. | 15.2:1 (AAA) |
-| **Secondary Ink** | `--color-ink-2` | `#3A3632` | Secondary labels, captions, metadata, table headers. | 7.1:1 (AA) |
-| **Muted Ink / Void** | `--color-ink-3` | `#6B6560` | Disabled text, voided outcomes, neutral borders. | 4.5:1 (AA) |
-| **Archival Paper** | `--color-paper` | `#FCFAF7` | Workspace background. Calm, non-glare canvas replacing stark white. | Base |
+| **Structure / Authority** | `--color-ink` | `#13251E` | Deep-green command rails, primary text, max-loss risk typography, structural anchors. | 14.88:1 (AAA) |
+| **Secondary Ink** | `--color-ink-2` | `#33453C` | Secondary labels, captions, metadata, table headers. | 9.48:1 (AAA) |
+| **Muted Ink / Void** | `--color-ink-3` | `#5D675F` | Disabled text, voided outcomes, neutral state copy. | 5.5:1 (AA) |
+| **Archival Paper** | `--color-paper` | `#F6F7F2` | Off-white workspace background. Calm, non-glare reading canvas. | Base |
 | **Surface Panel** | `--color-surface` | `#FFFFFF` | Raised decision panels (Honest Ticket, Discovery Table). | Base |
-| **Inset Telemetry** | `--color-muted` | `#F2EFEA` | Previews, trade receipts, empty states, table hover highlights. | Base |
-| **Rule Divider** | `--color-border` | `#E8E2D9` | 1px structural dividers, section rules. | N/A |
-| **Strong Border** | `--color-border-2` | `#D6CFBF` | Table header borders, selected market outlines, input borders. | N/A |
-| **Live Signal** | `--color-signal` | `#0899A6` / `#06707A` | **Live & active telemetry only**: selected market edge, live pulse dot, Explorer links. (<5% surface area). | 4.6:1 (AA) |
-| **Up Direction / Success** | `--color-up` | `#0A7A5A` | UP direction, won positions, verified execution. Always paired with text label. | 5.2:1 (AA) |
-| **Down Direction / Loss** | `--color-down` | `#9E2B25` | DOWN direction, lost positions, blocked execution. Always paired with text label. | 5.8:1 (AA) |
-| **Caution / Cooldown** | `--color-amber` | `#B9512A` | Spread warnings, headroom warnings, active cooldown timer bar. | 4.8:1 (AA) |
-| **System Focus** | `--color-focus` | `#141210` | 2px solid offset outline for keyboard navigation. | 15.2:1 (AAA) |
+| **Inset Telemetry** | `--color-muted` | `#EEF1EA` | Previews, trade receipts, empty states, table hover highlights. | Base |
+| **Rule Divider** | `--color-border` | `#D8E0D6` | 1px structural dividers, section rules. | N/A |
+| **Strong Border** | `--color-border-2` | `#B8C8BA` | Table header borders, selected market outlines, input borders. | N/A |
+| **Live Signal** | `--color-signal` | `#08635F` | **Live & active telemetry only**: selected market edge, live pulse dot, Explorer links. (<5% surface area). | 6.59:1 (AA) |
+| **Up Direction / Success** | `--color-up` | `#145A43` | UP direction, won positions, verified execution. Always paired with text label. | 8.16:1 (AAA) |
+| **Down Direction / Loss** | `--color-down` | `#A33A32` | DOWN direction, lost positions, blocked execution. Always paired with text label. | 6.54:1 (AA) |
+| **Caution / Cooldown** | `--color-amber` | `#9A5A1F` | Spread warnings, headroom warnings, active cooldown timer bar. | 5.45:1 (AA) |
+| **System Focus** | `--color-focus` | `#13251E` | 2px solid offset outline for keyboard navigation. | 14.88:1 (AAA) |
 
 ---
 
 ## 3. Typography Roles & Scale
 
 Three font families, each assigned a non-overlapping operational role:
-- **Display & Headlines:** `Newsreader` (serif, editorial authority, 500/600 weight, `-0.02em` tracking). Never used for numeric financial data.
+- **Display & Headlines:** `Newsreader` (serif, editorial authority, 500/600 weight, neutral tracking). Never used for numeric financial data.
 - **Telemetry & Financial Data:** `JetBrains Mono` (tabular numbers, no ligatures, 400/600/700 weight). Used for prices, risk numbers, countdowns, hashes, and book bids/asks.
 - **UI & Interface Copy:** `Inter` (sans-serif, clean legibility, 400/500/600 weight). Used for body prose, button labels, and input captions.
 
@@ -50,15 +50,15 @@ Three font families, each assigned a non-overlapping operational role:
 
 | Role Token | Font Family | Size / Line-Height | Weight / Tracking | Case | Maximum Measure | Purpose |
 |---|---|---|---|---|---|---|
-| `--type-display` | Newsreader | 56px / 0.95 | 500 / -0.03em | Sentence | 16ch | Homepage hero headline |
-| `--type-h1` | Newsreader | 32px / 1.1 | 500 / -0.02em | Sentence | 24ch | Section titles, Operational Control |
-| `--type-h2` | Inter | 20px / 1.2 | 600 / -0.01em | Title | 30ch | Panel heads (Live Windows, Honest Ticket) |
+| `--type-display` | Newsreader | 56px / 0.95 | 500 / 0.00em | Sentence | 16ch | Homepage hero headline |
+| `--type-h1` | Newsreader | 32px / 1.1 | 500 / 0.00em | Sentence | 24ch | Section titles, Operational Control |
+| `--type-h2` | Inter | 20px / 1.2 | 600 / 0.00em | Title | 30ch | Panel heads (Live Windows, Honest Ticket) |
 | `--type-h3` | Inter | 15px / 1.35 | 600 / 0.00em | Title | 40ch | Sub-headers, modal titles |
 | `--type-body` | Inter | 14px / 1.5 | 400 / 0.00em | Sentence | 65ch | Explanatory prose, body text |
 | `--type-small` | Inter | 13px / 1.45 | 400 / 0.00em | Sentence | 60ch | Table cells, ticket row values |
 | `--type-caption` | Inter | 11px / 1.4 | 600 / +0.08em | UPPERCASE | 50ch | Field labels, eyebrows, section tags |
-| `--type-mono-hero` | JetBrains Mono | 28px / 1.1 | 700 / -0.02em | Tabular | 12ch | **MAX LOSS RISK NUMBER (Centerpiece)** |
-| `--type-mono-price` | JetBrains Mono | 18px / 1.2 | 600 / -0.01em | Tabular | 12ch | Orderbook best bid / best ask |
+| `--type-mono-hero` | JetBrains Mono | 28px / 1.1 | 700 / 0.00em | Tabular | 12ch | **MAX LOSS RISK NUMBER (Centerpiece)** |
+| `--type-mono-price` | JetBrains Mono | 18px / 1.2 | 600 / 0.00em | Tabular | 12ch | Orderbook best bid / best ask |
 | `--type-mono-small` | JetBrains Mono | 12px / 1.4 | 400 / 0.00em | Tabular | 40ch | Hashes, IDs, proof receipts |
 | `--type-mono-badge` | JetBrains Mono | 11px / 1.2 | 600 / +0.08em | UPPERCASE | 20ch | Badges, state pills |
 
@@ -86,12 +86,12 @@ Panels exist purely to serve structural hierarchy. **Zero nested card-soup.**
 
 | Surface Role | Background Token | Border Token | Radius Token | Shadow | Purpose |
 |---|---|---|---|---|---|
-| **Page Workspace** | `--color-paper` (`#FCFAF7`) | None | `0px` | None | Base reading background. |
-| **Command Rail** | `--color-ink` (`#141210`) | `1px solid #000` | `0px` | None | Header masthead rail. |
+| **Page Workspace** | `--color-paper` (`#F6F7F2`) | None | `0px` | None | Base reading background. |
+| **Command Rail** | `--color-ink` (`#13251E`) | `1px solid #08150F` | `0px` | None | Header masthead rail. |
 | **Raised Panel** | `--color-surface` (`#FFFFFF`) | `1px solid --color-border` | `--radius-m` (`8px`) | `0 1px 2px rgba(20,18,16,.05)` | Honest Ticket, Discovery Rail, Positions. |
-| **Inset Telemetry** | `--color-muted` (`#F2EFEA`) | `1px solid --color-border` | `--radius-m` (`8px`) | None | Previews, trade receipts, empty states. |
-| **Policy Control Box**| `--color-paper` (`#FCFAF7`) | `1px solid --color-border-2` | `--radius-s` (`4px`) | None | Embedded Policy Gate primitive. |
-| **Active Overlay** | `--color-ink` (`#141210`) | `1px solid --color-ink` | `--radius-m` (`8px`) | None | Cooldown tilt-guard feature panel. |
+| **Inset Telemetry** | `--color-muted` (`#EEF1EA`) | `1px solid --color-border` | `--radius-m` (`8px`) | None | Previews, trade receipts, empty states. |
+| **Policy Control Box**| `--color-paper` (`#F6F7F2`) | `1px solid --color-border-2` | `--radius-s` (`4px`) | None | Embedded Policy Gate primitive. |
+| **Active Overlay** | `--color-ink` (`#13251E`) | `1px solid --color-ink` | `--radius-m` (`8px`) | None | Cooldown tilt-guard feature panel. |
 
 ---
 
@@ -120,7 +120,9 @@ Motion in Steady communicates system state transitions and validation progress. 
 - **Primary Action Verb:** Always explicit with calculated cost: `Buy UP — 22.40` or `Buy DOWN — 22.40`.
 - **Policy Denial:** Always includes exact code and remaining duration: `Policy blocked: COOLDOWN — 142s remaining (2 consecutive losses)`.
 - **Error Messages:** `amber left border` + `Mono 12px exact error code` + plain human explanation + recovery button.
-- **Receipt Proof:** `Trade completed — steady-1725... · Fill verified — quoted 0.049 → fill 0.021`.
+- **Receipt Proof:** `TRANSACTION CONFIRMED · FILL VERIFIED — steady-1725... · quoted 0.049 → fill 0.021`.
+- **BUY_NO receipt:** show `NO quote → NO fill` first. Preserve the SDK's YES-term
+  evidence beneath it as `YES-equivalent quote → YES-equivalent fill`.
 
 ---
 
@@ -200,19 +202,22 @@ BLOCKED       ── [ ⛔ Policy Denied: Cooldown / Spread / Headroom ]
 
 ## 11. Responsive Transformations
 
-- **1280px+ (Desktop Workspace):** Asymmetric `1.2fr : 0.8fr` grid. Sticky Honest Ticket on right column.
-- **768px - 1024px (Tablet):** Terminal converts to 1-column stack. Ticket sits static above Discovery Rail.
+- **1280px+ (Desktop Workspace):** Independent support and decision columns at
+  `1.2fr : 0.8fr`; the sticky Honest Ticket is on the right without forcing a
+  blank interval into the support column.
+- **768px - 1024px (Tablet):** Terminal converts to a one-column task stack.
+  The ticket follows the stage rail and remains static above lifecycle surfaces.
 - **375px - 390px (Mobile):** Single column, 16px gutters, 0px horizontal overflow.
-  - Priority Stack: Max Loss Risk Input → Outcome Matrix → Policy Gate → Directional Buttons → Discovery Rail → Positions Ledger.
+  - Priority Stack: Market Discovery → Max Loss Risk Input → Outcome Matrix → Policy Gate → Directional Buttons → Positions Ledger → Settlement.
   - Tables convert to block cards with `data-l` caption prefixes.
 
 ---
 
 ## 12. Accessibility Targets (WCAG 2.2 AA)
 
-- **Contrast Ratios:** Text on paper ≥ 7:1 (AA/AAA). Live signal text `#06707A` on paper = 4.6:1 (AA).
+- **Contrast Ratios:** Text on paper ≥ 7:1 (AA/AAA). Live signal text `#08635F` on paper = 6.59:1 (AA).
 - **Touch Targets:** Minimum 44px height for risk inputs, direction buttons, and mobile tabs.
-- **Focus Rings:** `2px solid #141210` offset 2px. Visible on keyboard tab navigation.
+- **Focus Rings:** `2px solid #13251E` offset 2px. Visible on keyboard tab navigation.
 - **Non-Color State:** Every state combines text + label + border style. Never rely on color alone.
 
 ---
@@ -234,21 +239,21 @@ Steady must NEVER contain:
 ```css
 :root {
   /* Colors */
-  --color-ink: #141210;
-  --color-ink-2: #3A3632;
-  --color-ink-3: #6B6560;
-  --color-paper: #FCFAF7;
+  --color-ink: #13251E;
+  --color-ink-2: #33453C;
+  --color-ink-3: #5D675F;
+  --color-paper: #F6F7F2;
   --color-surface: #FFFFFF;
-  --color-muted: #F2EFEA;
-  --color-border: #E8E2D9;
-  --color-border-2: #D6CFBF;
-  --color-signal: #0899A6;
-  --color-signal-text: #06707A;
-  --color-signal-dot: #0ADBE5;
-  --color-up: #0A7A5A;
-  --color-down: #9E2B25;
-  --color-amber: #B9512A;
-  --color-focus: #141210;
+  --color-muted: #EEF1EA;
+  --color-border: #D8E0D6;
+  --color-border-2: #B8C8BA;
+  --color-signal: #08635F;
+  --color-signal-text: #08635F;
+  --color-signal-dot: #22B8A8;
+  --color-up: #145A43;
+  --color-down: #A33A32;
+  --color-amber: #9A5A1F;
+  --color-focus: #13251E;
 
   /* Spacing */
   --space-4: 4px;

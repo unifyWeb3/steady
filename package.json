@@ -11,7 +11,7 @@
     "dev": "node serve.mjs",
     "serve": "node serve.mjs",
     "typecheck": "echo \"no tsc — lib is JS/TS pure, validated via tests\"",
-    "build": "mkdir -p dist && cp -r app/* dist/ && echo 'build done' && ls -lh dist/"
+    "build": "node build.mjs"
   },
   "keywords": [],
   "author": "",
