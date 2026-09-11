@@ -229,3 +229,9 @@
   - Playwright: 11/11 PASS (`npx playwright test tests/e2e --reporter=line --workers=1 --timeout=60000`, Node v22.22.3, ~1.9m).
   - `npm run validate` (first run, no retry needed): Gate 1 PASS (binaryModule 0x3ecC69); Gate 2 PASS (20 live); Steady-filtered BTC/ETH 900/3600 >300s = 0 at 14:59 UTC (all windows near expiry; harness reports not-a-failure); Gate 3 PASS via Trading search (market 0x...1a3a5 pool 0xf0981caa..., status 1); Gate 4a PASS (5/5 levels, best yesBid 444000 / best yesAsk 514000); Gate 4b PASS (tick/lot/min 1000); Gate 6 PASS (2 claimables preserved, NOT redeemed); write gate skipped. No EAI_AGAIN, no mock, no raw IP, no proxy.
 - HISTORICAL EVIDENCE (unchanged, not re-dated): earlier real IOC hashes, browser YES/NO hashes, and settlement/redemption transactions remain as recorded above.
+
+## 2026-09-11 ~15:09 UTC - Production deployment verification (read-only, no funded writes)
+
+- No Vercel CLI credentials existed here, so no CLI deploy ran. Live `https://somnia-snowy.vercel.app` serves the release candidate (Vercel `last-modified 15:09 UTC`, consistent with auto-deploy from the release-commit push).
+- Artifact: `/` + `/terminal` 200 byte-identical to the new build; `/runtime-config.js` 200 (chain 50312); `/app.js` 87,183 bytes byte-identical to `dist/app.js` with PARTIAL FILL + Quoted NO present and `Trade completed`/secrets/localhost absent.
+- Smoke: 15/15 Playwright PASS on the prod URL, zero console/page errors. The 2 claimables remain unredeemed; no `validate:write` ran.
