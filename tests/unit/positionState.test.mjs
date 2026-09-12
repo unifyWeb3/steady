@@ -14,6 +14,9 @@ describe("positionState", ()=>{
     assert.equal(resolvePositionState({ side:"BUY_YES", status:null, expirySec:100, nowSec:200 }), "UNKNOWN");
     assert.equal(resolvePositionState({ side:"BUY_YES", status:null, expirySec:300, nowSec:200 }), "UNKNOWN");
   });
+  it("unresolved account-side attribution stays UNKNOWN", ()=>{
+    assert.equal(resolvePositionState({ accountSide:"UNKNOWN", status:1, yesBalanceRaw:1000n }), "UNKNOWN");
+  });
   it("ignores default winningOutcome 0 on unresolved markets", ()=>{
     assert.equal(resolvePositionState({ side:"BUY_NO", status:1, winningOutcome:0, isResolved:false }), "LIVE");
   });

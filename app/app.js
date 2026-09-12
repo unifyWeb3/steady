@@ -15,6 +15,9 @@ import {
 } from "../lib/steady/trade-intent.js";
 import { getBrowserConfig } from "../lib/config/browser.js";
 import { computeScore, settledCallFromFill, brierLabel } from "../lib/steady/scoring.js";
+import { deriveDiscipline } from "../lib/steady/discipline.js";
+import { attributeFillSide, normalizeFillsChronologically } from "../lib/steady/fill-attribution.js";
+import { classifyTradeSubmissionError } from "../lib/steady/trade-reconciliation.js";
 import { resolvePositionState } from "../lib/steady/position-state.js";
 import { escapeHtml, safeExplorerTx, isHexHash } from "../lib/steady/dom.js";
 import {
@@ -110,11 +113,14 @@ let exchange = null;
 let selected = null; // SteadyMarket
 let book = null;
 let bookParams = null;
+let bookReceivedAt = 0;
 let walletClient = null;
 let walletAddress = null;
 let walletChainVerified = false;
 let fillsCache = []; // settled + open
 let cooldownUntil = null;
+let cooldownKey = null;
+let cooldownStateLoaded = false;
 let marketsCache = [];
 const discoveryRequests = createRequestGeneration();
 const selectionRequests = createRequestGeneration();
@@ -125,7 +131,40 @@ let redemptionState = "READY";
 let redemptionHash = "";
 let redemptionEntries = [];
 let selectionError = "";
-let unresolvedTransactionHash = "";
+let unresolvedTradeAttempt = null;
+
+const COOLDOWN_UNTIL_STORAGE = "steady:cooldownUntil";
+const COOLDOWN_KEY_STORAGE = "steady:cooldownKey";
+
+function restoreCooldownState() {
+  if (cooldownStateLoaded) return;
+  cooldownStateLoaded = true;
+  try {
+    const storedUntil = Number(localStorage.getItem(COOLDOWN_UNTIL_STORAGE));
+    if (Number.isFinite(storedUntil) && storedUntil > 0) cooldownUntil = storedUntil;
+    cooldownKey = localStorage.getItem(COOLDOWN_KEY_STORAGE) || null;
+  } catch {}
+}
+
+function persistCooldownState() {
+  try {
+    if (cooldownUntil && cooldownUntil > Date.now()) localStorage.setItem(COOLDOWN_UNTIL_STORAGE, String(cooldownUntil));
+    else localStorage.removeItem(COOLDOWN_UNTIL_STORAGE);
+    if (cooldownKey) localStorage.setItem(COOLDOWN_KEY_STORAGE, cooldownKey);
+    else localStorage.removeItem(COOLDOWN_KEY_STORAGE);
+  } catch {}
+}
+
+function currentDiscipline(calls = window.__lastSettledCalls || [], nowMs = Date.now()) {
+  restoreCooldownState();
+  const previousUntil = cooldownUntil;
+  const previousKey = cooldownKey;
+  const state = deriveDiscipline(calls, nowMs, cooldownUntil, cooldownKey);
+  cooldownUntil = state.cooldownUntilMs;
+  cooldownKey = state.cooldownKey || cooldownKey || null;
+  if (previousUntil !== cooldownUntil || previousKey !== cooldownKey) persistCooldownState();
+  return state;
+}
 
 // Outage cache: bigint-safe persist so returning wallets keep working when the
 // indexer is down (chain RPC reads still resolve states fully on-chain).
@@ -315,6 +354,7 @@ async function loadMarkets(){
       selected = null;
       book = null;
       bookParams = null;
+      bookReceivedAt = 0;
       updatePreview();
       els.marketTbody.innerHTML = "";
       els.marketEmpty.style.display="block";
@@ -340,6 +380,7 @@ async function loadMarkets(){
       selected = null;
       book = null;
       bookParams = null;
+      bookReceivedAt = 0;
       updatePreview();
       els.marketTbody.innerHTML = `<tr><td colspan="6" class="empty">
         <div style="padding:16px;display:grid;gap:12px;justify-items:center">
@@ -434,6 +475,7 @@ async function selectMarket(m){
   // A new label is never allowed to inherit the previous market's economics.
   book = null;
   bookParams = null;
+  bookReceivedAt = 0;
   selectionError = "";
   els.ticketMarket.textContent = `${m.asset} ${m.intervalSec===60?"1m":m.intervalSec===300?"5m":m.intervalSec===900?"15m":m.intervalSec===3600?"1h":m.intervalSec===14400?"4h":m.intervalSec===86400?"1d":`${m.intervalSec}s`} · expiry ${new Date(m.expirySec*1000).toISOString().slice(11,16)} UTC · ${mktShort(m.marketId)} · pool ${m.pool.slice(0,10)}…`;
   els.ticketMarket.title = m.marketId;
@@ -449,12 +491,14 @@ async function selectMarket(m){
     if (!current()) return;
     book = nextBook;
     bookParams = nextBookParams;
+    bookReceivedAt = Date.now();
     selectionError = "";
     updatePreview();
   }catch(e){
     if (!current()) return;
     book = null;
     bookParams = null;
+    bookReceivedAt = 0;
     selectionError = `Book unavailable: ${(e.message || String(e)).slice(0,100)}`;
     updatePreview();
   }
@@ -483,16 +527,19 @@ function computeTicket(maxLossHuman, side){
 
 function updateExecutionControls(){
   const maxLoss = Number(els.maxLoss.value);
+  const discipline = currentDiscipline();
   const globalReasons = [];
   if (!walletAddress || !walletClient || !walletChainVerified) globalReasons.push("connect wallet on Shannon 50312");
   if (!selected) globalReasons.push("select a verified Trading window");
   else if (selected.status !== 1) globalReasons.push("market status is not verified Trading");
   if (!book || !bookParams) globalReasons.push(selectionError || "fresh orderbook is loading");
+  // The displayed book is informational. Execution always takes a fresh
+  // status/book/params snapshot immediately before signing.
   if (!(maxLoss > 0)) globalReasons.push("enter a max loss");
   if (!els.confirmBox.checked) globalReasons.push("acknowledge the IOC max-loss terms");
-  if (cooldownUntil && cooldownUntil > Date.now()) globalReasons.push("cooldown is active");
+  if (discipline.blocked) globalReasons.push("cooldown is active");
   if (window.__submitting) globalReasons.push("another transaction is submitting");
-  if (unresolvedTransactionHash) globalReasons.push("previous transaction is unresolved");
+  if (unresolvedTradeAttempt) globalReasons.push("previous transaction is unresolved");
   if (walletAddress && window.__tUSDCBalance === undefined) globalReasons.push("collateral balance is unavailable");
   const globalBlocked = globalReasons.length > 0;
   const sideReasons = {};
@@ -580,8 +627,9 @@ function updatePreview(){
   els.buyYes.textContent = yes.error ? "Buy UP" : `Buy UP — ${yesDisplay.pay}`;
   els.buyNo.textContent = no.error ? "Buy DOWN" : `Buy DOWN — ${noDisplay.pay}`;
   // Policy consistency: current account state vs this execution's policy result must never contradict
-  if (cooldownUntil && cooldownUntil > Date.now()){
-    const secs = Math.ceil((cooldownUntil-Date.now())/1000);
+  const discipline = currentDiscipline();
+  if (discipline.blocked){
+    const secs = discipline.resumeInSec ?? Math.ceil((discipline.cooldownUntilMs-Date.now())/1000);
     els.previewCapped.textContent = `Trade policy: DENIED — cooldown active (${secs}s remaining). Current account state: COOLDOWN.`;
     if (els.previewCappedRow) els.previewCappedRow.style.display = "flex";
   } else {
@@ -619,10 +667,9 @@ function renderPolicyGate(){
     try{ spread = (Number(book.yesAsks[0].price) - Number(book.yesBids[0].price)) / 1e6; }catch{}
   }
   set("pg-spread", spread === null ? null : spread <= 0.15, spread === null ? "Book loading…" : `Spread ${spread.toFixed(3)}${spread > 0.15 ? " — execution will refuse (SPREAD_TOO_WIDE)" : ""}`);
-  const settled = (window.__lastSettledCalls || []).filter(c=>!c.void);
-  let streak = 0;
-  for(let i=settled.length-1;i>=0;i--){ if(!settled[i].won) streak++; else break; }
-  const cooling = !!(cooldownUntil && cooldownUntil > Date.now());
+  const discipline = currentDiscipline();
+  const streak = discipline.consecutiveLosses;
+  const cooling = discipline.blocked;
   set("pg-discipline", cooling ? false : true, cooling ? `${streak} consecutive losses — cooldown active` : streak ? `${streak} straight loss${streak>1?"es":""} (2 in a row blocks)` : "No loss streak");
   const bal = window.__tUSDCBalance;
   set("pg-balance", !walletAddress ? null : (bal === undefined ? null : bal > 0n), !walletAddress ? "Connect wallet" : bal === undefined ? "Reading balance…" : bal > 0n ? `${(Number(bal)/1e6).toFixed(2)} tUSDC` : "Empty — use the faucet button");
@@ -780,15 +827,16 @@ async function resolveFillStates(ex, generation){
     const expiry = m?.expirySec || (oc.expiry ? Number(oc.expiry) : 0);
     const status = (oc.status === undefined || oc.status === null) ? null : Number(oc.status);
     const win = (oc.winningOutcome === 0 || oc.winningOutcome === 1) ? oc.winningOutcome : ((Number(oc.winningOutcome) === 0 || Number(oc.winningOutcome) === 1) ? Number(oc.winningOutcome) : null);
+    const attribution = attributeFillSide(f, walletAddress);
     const state = resolvePositionState({
-      takerSide: f.takerSide, side: f.side, status,
+      accountSide: attribution.side, takerSide: f.takerSide, side: f.side, status,
       isResolved: oc.isResolved === true, isVoided: oc.isVoided === true,
       winningOutcome: win,
       yesBalanceRaw: oc._yes ?? 0n, noBalanceRaw: oc._no ?? 0n,
       expirySec: expiry, nowSec: now,
-      redeemed: redeemed.has(`${f.market}:${f.takerSide || f.side || ""}`),
+      redeemed: redeemed.has(`${f.market}:${attribution.side === "UNKNOWN" ? "UNKNOWN" : `BUY_${attribution.side.endsWith("NO") ? "NO" : "YES"}`}`),
     });
-    return { ...f, _state: state, _expiry: expiry };
+    return { ...f, _accountSide: attribution.side, _accountRole: attribution.role, _state: state, _expiry: expiry };
   });
 }
 
@@ -828,7 +876,7 @@ function renderPositions(){
     tbody.appendChild(gh);
     for(const f of fills){
       const tr=document.createElement("tr");
-      const side = String(f.takerSide||f.side||"—");
+      const side = String(f._accountSide || attributeFillSide(f, walletAddress).side || "UNKNOWN");
       const sideCls = side.includes("YES") ? "badge badge-up" : side.includes("NO") ? "badge badge-down" : "badge badge-quiet";
       const tx = f.txHash || "";
       // Quantity is 6-decimal raw (same base as ticket: 1000 raw = 1 lot = 0.001 contracts).
@@ -849,39 +897,50 @@ function renderPositions(){
 function renderScore(){
   const generation = scoreRequests.start();
   const current = () => scoreRequests.isCurrent(generation);
-  const fills = fillsCache.slice(0, 20);
+  // SDK getUserFills is newest-first. Keep only the newest 20, but normalize
+  // them oldest-first before deriving trailing outcomes and scores.
+  const fills = normalizeFillsChronologically(fillsCache).slice(-20);
   els.brierVal.textContent = "— need oracle outcomes (fetching…)";
   els.edgeVal.textContent = "—";
   els.scoreN.textContent = `n ${fills.length}`;
   els.brierFill.style.width = "0%";
   els.edgeFill.style.width = "0%";
   els.last5.innerHTML = "";
-  if (fills.length < 5) {
-    els.brierVal.textContent = "— Need 5 settled";
-    return;
-  }
   (async()=>{
     let ex;
-    try{ ex = await getExchange(); } catch { if (current()) els.brierVal.textContent = "— SDK unavailable"; return; }
+    try{ ex = await getExchange(); } catch { if (current()) { els.brierVal.textContent = "— SDK unavailable"; renderDiscipline(); } return; }
     const calls=[];
+    const identify = (call, fill) => ({
+      ...call,
+      eventKey: fill.id || fill.txHash || `${fill.market || "market"}:${fill.timestamp || "time"}:${fill.logIndex || "log"}`,
+      timestamp: fill.timestamp,
+      blockNumber: fill.blockNumber,
+      logIndex: fill.logIndex,
+    });
     for(const f of fills){
       if (!current()) return;
       try{
         const res = await ex.client.getMarketOnchain(f.market);
         const status = Number(res.status);
         const winIdx = res.winningOutcome ?? res.winner ?? null;
-        const side = f.takerSide || f.side;
+        const side = attributeFillSide(f, walletAddress).side;
+        // A lagging/unresolved account side cannot support a truthful score or
+        // discipline outcome. The position ledger keeps that row UNKNOWN.
+        if (side === "UNKNOWN") continue;
         if (status === 5) {
-          calls.push(settledCallFromFill({ fillPriceRaw: f.fillPrice, side, won: false, voided: true }));
+          calls.push(identify(settledCallFromFill({ fillPriceRaw: f.fillPrice, side, won: false, voided: true }), f));
         } else if (status === 4 && (winIdx === 0 || winIdx === 1)) {
           const sideIsYes = /YES/.test(String(side || ""));
-          calls.push(settledCallFromFill({ fillPriceRaw: f.fillPrice, side, won: (winIdx === 0) === sideIsYes }));
+          calls.push(identify(settledCallFromFill({ fillPriceRaw: f.fillPrice, side, won: (winIdx === 0) === sideIsYes }), f));
         }
       }catch{}
     }
     if (!current()) return;
+    // Discipline is useful before the score's five-call calibration threshold;
+    // publish every resolved outcome, including a two-loss history.
+    window.__lastSettledCalls = calls;
+    renderDiscipline(calls);
     const score = computeScore(calls);
-    window.__lastSettledCalls = calls.filter((call) => !call.void);
     els.scoreN.textContent = `n ${score.n}`;
     els.brierVal.textContent = score.brier === null ? "— Need 5 settled" : score.brier.toFixed(3);
     els.edgeVal.textContent = score.edge === null ? "—" : `${score.edge >= 0 ? "+" : ""}${score.edge.toFixed(3)}`;
@@ -889,34 +948,16 @@ function renderScore(){
     els.brierFill.style.width = score.brier === null ? "0%" : `${Math.min(100, (score.brier / 0.5) * 100)}%`;
     els.edgeFill.style.width = score.edge === null ? "0%" : `${Math.max(0, Math.min(100, 50 + score.edge * 100))}%`;
     els.last5.innerHTML = score.last5.map((won) => `<span class="wl-dot ${won ? "wl-w" : "wl-l"}" title="${won ? "Won" : "Lost"}">${won ? "W" : "L"}</span>`).join("");
-    renderDiscipline(window.__lastSettledCalls);
   })();
 }
 
 function renderDiscipline(calls){
-  // calls: array of {won, void} from real settlement — if not provided, derive from last rendered score
-  // If no calls provided, try to use last computed settled calls from renderScore (stored globally)
-  const settled = calls || window.__lastSettledCalls || [];
-  let streak=0;
-  for(let i=settled.length-1;i>=0;i--){
-    if(settled[i].void) continue;
-    if(!settled[i].won) streak++; else break;
-  }
-  if (streak>=2 && (!cooldownUntil || cooldownUntil <= Date.now())){
-    cooldownUntil = Date.now() + 3*60*1000;
-    try{ localStorage.setItem("steady:cooldownUntil", String(cooldownUntil)); }catch{}
-  }
+  const state = currentDiscipline(calls ?? window.__lastSettledCalls ?? []);
+  const streak = state.consecutiveLosses;
   window.__cooldownStreak = streak;
-  // Restore cooldown from storage on load
-  if(!cooldownUntil){
-    try{
-      const v = localStorage.getItem("steady:cooldownUntil");
-      if(v) { const ts=Number(v); if(ts>Date.now()) cooldownUntil=ts; else localStorage.removeItem("steady:cooldownUntil"); }
-    }catch{}
-  }
-  if (cooldownUntil && cooldownUntil > Date.now()){
+  if (state.blocked){
     els.tiltGuard.style.display="grid";
-    const sec = Math.ceil((cooldownUntil - Date.now())/1000);
+    const sec = state.resumeInSec ?? Math.ceil((state.cooldownUntilMs - Date.now())/1000);
     els.tiltCountdown.textContent = `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
     els.tiltMsg.textContent = `${streak} consecutive losses. Trading resumes in ${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}.`;
     els.buyYes.disabled = true;
@@ -926,10 +967,6 @@ function renderDiscipline(calls){
     const gateBadge = document.getElementById("policyGateBadge");
     if(gateBadge){ gateBadge.textContent = "Blocked"; gateBadge.className = "badge badge-down"; }
   } else {
-    if(cooldownUntil && cooldownUntil <= Date.now()){
-      cooldownUntil=null;
-      try{ localStorage.removeItem("steady:cooldownUntil"); }catch{}
-    }
     els.tiltGuard.style.display="none";
     const gateBadge = document.getElementById("policyGateBadge");
     if(gateBadge){ gateBadge.textContent = "Authorized"; gateBadge.className = "badge badge-up"; }
@@ -941,11 +978,69 @@ function renderDiscipline(calls){
 }
 window.__lastSettledCalls = [];
 
+function reconcileTradeAttempt(attempt, market, pool) {
+  const { tradeAttemptId, txHash } = attempt;
+  (async()=>{
+    const ownsAttempt = () => unresolvedTradeAttempt?.tradeAttemptId === tradeAttemptId;
+    try{
+      const ex2 = await getExchange();
+      for(let i=0; i<6 && ownsAttempt(); i++){
+        await new Promise(r=>setTimeout(r,3000));
+        try{
+          const rc = await ex2.client.getViemClient().getTransactionReceipt({ hash: txHash });
+          if(rc.status === "success"){
+            if (!ownsAttempt()) return;
+            window.__submitting = false;
+            unresolvedTradeAttempt = null;
+            // A late receipt proves the transaction, not the financial effect.
+            // Reconcile the exact market/tx against indexed fills; indexer lag
+            // stays explicitly unknown instead of becoming a fill claim.
+            let fillState = "FILL UNKNOWN";
+            try {
+              const indexed = await withTimeout(
+                ex2.client.getUserFills(walletAddress, { since: 0, limit: 50, market: market.marketId }),
+                15000,
+                "Fill reconciliation",
+              );
+              const evidence = classifyIndexedFillEvidence(indexed, txHash);
+              if (evidence.state === "FILL_VERIFIED") fillState = "FILL VERIFIED";
+              else if (Array.isArray(indexed)) fillState = "FILL UNKNOWN (no indexed fill yet)";
+            } catch {}
+            els.execStatus.innerHTML = `<span class="code">RECONCILED · TRANSACTION CONFIRMED · ${h(fillState)}</span> Reconciled — ${txMarkup(txHash)} (was UNKNOWN)`;
+            els.execStatus.className = fillState === "FILL VERIFIED" ? "alert alert-success" : "alert";
+            refreshFills();
+            break;
+          }
+          if(rc.status === "reverted"){
+            if (!ownsAttempt()) return;
+            window.__submitting = false;
+            unresolvedTradeAttempt = null;
+            els.execStatus.textContent = `Reverted after UNKNOWN — ${shortHash(txHash)}`;
+            els.execStatus.className = "alert alert-risk";
+            break;
+          }
+        }catch{}
+      }
+    }catch{}
+    if (ownsAttempt()) {
+      // If no receipt arrived, keep the unresolved record so controls remain
+      // blocked even after the bounded polling loop stops.
+      window.__submitting = false;
+      updateExecutionControls();
+    }
+  })();
+}
 
 // Execution — real IOC via walletClient. Single authoritative write boundary:
 // every trader.placeOrder call in this app goes through here, after policy evaluation.
 async function execute(side){
   if(window.__submitting){ els.execStatus.style.display='block'; els.execStatus.textContent="Already submitting — wait for receipt (no duplicate)"; els.execStatus.className="alert"; return; }
+  if(unresolvedTradeAttempt){
+    els.execStatus.style.display='block';
+    els.execStatus.textContent = `UNKNOWN — previous trade attempt ${unresolvedTradeAttempt.tradeAttemptId} is unresolved; do not resubmit`;
+    els.execStatus.className = "alert";
+    return;
+  }
   if(!selected){ alert("Select a market first"); return; }
   if(!walletAddress || !walletClient || !walletChainVerified){ alert("Connect wallet on verified Shannon chain first"); return; }
   if(!els.confirmBox.checked){ alert("Confirm max loss understanding"); return; }
@@ -953,14 +1048,16 @@ async function execute(side){
   if(!maxLoss || maxLoss<=0){ alert("Enter max loss"); return; }
   const market = { ...selected };
   const tradeAttemptId = 'steady-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
+  const attempt = { tradeAttemptId, txHash: "", submissionStarted: false };
   debugLog(`[${tradeAttemptId}] intent`, { side, maxLoss, marketId: market.marketId });
   window.__submitting = true;
   els.buyYes.disabled=true; els.buyNo.disabled=true; els.execStatus.style.display='block';
   updateExecutionControls();
   // cooldown check — real discipline state, not placeholder
-  if (cooldownUntil && cooldownUntil > Date.now()){
-    const secs = Math.ceil((cooldownUntil-Date.now())/1000);
-    els.execStatus.textContent=`Policy blocked: COOLDOWN — ${secs}s remaining (2 consecutive losses)`;
+  const discipline = currentDiscipline();
+  if (discipline.blocked){
+    const secs = discipline.resumeInSec ?? Math.ceil((discipline.cooldownUntilMs-Date.now())/1000);
+    els.execStatus.textContent=`Policy blocked: COOLDOWN — ${secs}s remaining (${discipline.consecutiveLosses} consecutive losses)`;
     els.execStatus.className="alert alert-risk";
     window.__submitting=false; updateExecutionControls();
     return;
@@ -1047,12 +1144,11 @@ async function execute(side){
       if (intent.code === "MARKET_NOT_TRADING") await loadMarkets();
       return;
     }
-    // Discipline evaluation at the boundary — real settled outcomes only, never random
-    const _settled = (window.__lastSettledCalls || []).filter(c=>!c.void);
-    let _streak = 0;
-    for(let i=_settled.length-1;i>=0;i--){ if(!_settled[i].won) _streak++; else break; }
-    if(_streak>=2){
-      const msg = `COOLDOWN — ${_streak} consecutive losses (Brier over last ${_settled.length})`;
+    // Discipline evaluation at the boundary uses the same normalized domain
+    // helper as the rendered gate; real settled outcomes only, never random.
+    const boundaryDiscipline = currentDiscipline();
+    if(boundaryDiscipline.blocked){
+      const msg = `COOLDOWN — ${boundaryDiscipline.consecutiveLosses} consecutive losses`;
       debugLog(`[${tradeAttemptId}] policy DENY`, msg);
       els.execStatus.textContent=`Policy blocked: ${msg} — wait for cooldown`;
       els.execStatus.className="alert alert-risk";
@@ -1134,11 +1230,27 @@ async function execute(side){
     // Need trader via walletClient — SDK expects client.createTrader({ walletClient })
     // Import dynamically to avoid circular
     const trader = ex.client.createTrader({ walletClient });
+    // Re-read both provider identity and chain immediately before signer use.
+    // A wallet can change accounts or chains while the read/policy checks run.
+    const provider = getInjectedProvider();
+    if (!provider) throw new Error("Wallet provider unavailable before signing");
+    const [verifiedAccounts, verifiedChainHex] = await Promise.all([
+      provider.request({ method: "eth_accounts" }),
+      provider.request({ method: "eth_chainId" }),
+    ]);
+    const verifiedChain = parseInt(verifiedChainHex, 16);
+    if (verifiedChain !== CHAIN_ID) throw new Error(`Wrong chain before signing (expected ${CHAIN_ID}, got ${verifiedChainHex})`);
+    if (!Array.isArray(verifiedAccounts) || String(verifiedAccounts[0] || "").toLowerCase() !== String(walletAddress).toLowerCase()) {
+      throw new Error("Wallet account changed before signing; reconnect wallet");
+    }
     // Note: SDK placeOrder expects pool, side, price, quantity, orderType, expireTimestampNs
     const order = buildIocOrder(executableIntent, currentPool, finalExpiry);
+    attempt.submissionStarted = true;
     const res = await trader.placeOrder(order);
     const receipt = res.receipt || res;
-    const hash = receipt.transactionHash || res.transactionHash || res.hash || "unknown";
+    const rawHash = receipt.transactionHash || res.transactionHash || res.hash || "";
+    const hash = isHexHash(rawHash) ? rawHash : "";
+    attempt.txHash = hash;
     const status = receipt.status ?? res.status;
     const fillsKnown = Array.isArray(res.fills) || Array.isArray(receipt.fills);
     const resultFills = Array.isArray(res.fills) ? res.fills : (Array.isArray(receipt.fills) ? receipt.fills : []);
@@ -1152,16 +1264,23 @@ async function execute(side){
       requestedQuantityRaw: qtyRaw,
     });
     if (orderResult.state === "FAILED"){
-      els.execStatus.textContent=`Reverted: ${hash} — ${receipt.error || "unknown"}`;
+      els.execStatus.textContent=`Reverted: ${hash || "transaction hash unavailable"} — ${receipt.error || "unknown"}`;
       els.execStatus.className="alert alert-risk";
       _resetSubmit();
       return;
     }
-    if (orderResult.state === "UNKNOWN") {
-      if (isHexHash(hash)) unresolvedTransactionHash = hash;
-      els.execStatus.textContent = `UNKNOWN — transaction confirmation status unavailable for ${hash}`;
+    if (orderResult.state === "UNKNOWN" || !hash) {
+      unresolvedTradeAttempt = { tradeAttemptId, txHash: hash };
+      els.execStatus.textContent = hash
+        ? `UNKNOWN — transaction confirmation status unavailable for ${shortHash(hash)}`
+        : `UNKNOWN — current trade attempt ${tradeAttemptId} has no transaction hash; do not resubmit while it remains unresolved`;
       els.execStatus.className = "alert";
-      _resetSubmit();
+      if (!hash) debugLog(`[${tradeAttemptId}] UNKNOWN with no transaction hash; duplicate submission remains blocked`);
+      if (hash) reconcileTradeAttempt(attempt, market, currentPool);
+      else {
+        window.__submitting = false;
+        updateExecutionControls();
+      }
       return;
     }
     const fillSummary = summarizeOrderFills(side, resultFills, qtyRaw, fillsKnown);
@@ -1179,8 +1298,7 @@ async function execute(side){
     els.execStatus.innerHTML = `<span class="code">${h(evidenceLabel)}${h(acceptanceLabel)} · ${h(status)}</span> ${orderResult.state === "FILL_UNKNOWN" ? "Fill evidence unavailable — retry verification" : orderResult.state === "PARTIAL_FILL" ? "Partially filled — remainder cancelled" : orderResult.state === "FILLED" ? "Filled" : "Confirmed with zero fills — nothing paid"} — ${txMarkup(hash)}`;
     els.execStatus.className=(orderResult.state === "FILLED" || orderResult.state === "PARTIAL_FILL") ? "alert alert-success" : "alert";
     // refresh
-    unresolvedTransactionHash = "";
-    window.__lastAttemptHash = receipt.transactionHash || res.transactionHash || res.hash || "";
+    unresolvedTradeAttempt = null;
     // Actual fill is known IMMEDIATELY: IOC fills ride in the placeOrder result
     // (PlaceOrderResult.fills[].fillPrice, YES terms) — no 3s faith gap.
     // getUserFills refresh below stays as independent reconciliation.
@@ -1191,7 +1309,7 @@ async function execute(side){
         window.__lastFillPrice = _actualYes.toFixed(3);
       } else { window.__lastFillPrice = undefined; }
     }catch{ window.__lastFillPrice = undefined; }
-    debugLog(`[${tradeAttemptId}] CONFIRMED hash ${window.__lastAttemptHash} quoted ${(Number(yesPriceRaw)/1e6).toFixed(3)} vs actual will be verified via fill`);
+    debugLog(`[${tradeAttemptId}] CONFIRMED hash ${attempt.txHash} quoted ${(Number(yesPriceRaw)/1e6).toFixed(3)} vs actual will be verified via fill`);
     // Trade receipt — progressive disclosure: a mined zero-fill IOC is not a trade.
     try{
       const recEl=document.getElementById("tradeReceipt");
@@ -1208,7 +1326,7 @@ async function execute(side){
         const receiptFillStatus = orderResult.state === "FILL_UNKNOWN" ? "FILL UNKNOWN" : orderResult.state === "PARTIAL_FILL" ? "PARTIAL FILL" : orderResult.state === "FILLED" ? "FULL FILL" : "NO FILL";
         recEl.innerHTML =
            `<div class="receipt-head"><span class="receipt-title"><span class="panel-kicker">05 / Fill proof</span><span class="caption">${evidenceLabel}${acceptanceLabel} — ${tradeAttemptId}</span></span><span style="display:flex;gap:8px;align-items:center"><span class="badge ${orderResult.state === "FILLED" || orderResult.state === "PARTIAL_FILL" ? "badge-up" : orderResult.state === "FILL_UNKNOWN" ? "badge-unknown" : "badge-quiet"}">${orderResult.state === "FILL_UNKNOWN" ? "Fill unknown" : orderResult.state === "PARTIAL_FILL" ? "Partial fill" : orderResult.state === "FILLED" ? "Full fill" : "No fill"}</span><button class="btn btn-secondary btn-sm" id="copyProofBtn" type="button">Copy proof</button></span></div>` +
-          `<div style="padding:10px 12px;font-size:13px">${h(side.replace("BUY_",""))} ${requestedDisplay} requested · ${filledDisplay} filled · ${remainingDisplay} remaining · max loss ${maxLossDisplay} tUSDC · ${txMarkup(window.__lastAttemptHash)}</div>` +
+          `<div style="padding:10px 12px;font-size:13px">${h(side.replace("BUY_",""))} ${requestedDisplay} requested · ${filledDisplay} filled · ${remainingDisplay} remaining · max loss ${maxLossDisplay} tUSDC · ${txMarkup(attempt.txHash)}</div>` +
           `<details><summary>View proof <span class="caption">side terms · SDK evidence · policy</span></summary><div class="proof">` +
           `<div class="prow"><span class="k">Market / pool</span><span class="v">${h(mktShort(market.marketId))} / ${h(currentPool.slice(0,10))}…</span></div>` +
           `<div class="prow"><span class="k">Requested</span><span class="v">${requestedDisplay} contracts</span></div>` +
@@ -1220,14 +1338,14 @@ async function execute(side){
           `<div class="prow"><span class="k">Max loss / expiry</span><span class="v">${maxLossDisplay} · ${expiryDisplay} UTC</span></div>` +
           `<div class="prow"><span class="k">Policy at execution</span><span class="v">${h(formatPolicyProof(policyChecks))}</span></div>` +
           `<div class="prow"><span class="k">Wallet</span><span class="v">${h(walletAddress.slice(0,10))}…</span></div>` +
-          `<div class="prow"><span class="k">Tx</span><span class="v">${txMarkup(window.__lastAttemptHash)}</span></div>` +
+          `<div class="prow"><span class="k">Tx</span><span class="v">${txMarkup(attempt.txHash)}</span></div>` +
           `<div class="prow"><span class="k">Order</span><span class="v">${h(String(orderIdDisplay).slice(0,18))}</span></div>` +
            `</div></details>`;
         // Shareable proof: text+link (no gamification) — the receipt travels.
         try{
           const cp = document.getElementById("copyProofBtn");
           if(cp) cp.onclick = async()=>{
-            const txt = `Steady receipt: ${side.replace("BUY_","")} requested ${requestedDisplay}, filled ${filledDisplay}, remaining ${remainingDisplay} (${receiptFillStatus}) · ${pricePresentation.copyText} · max loss ${maxLossDisplay} tUSDC · tx https://shannon-explorer.somnia.network/tx/${window.__lastAttemptHash}`;
+            const txt = `Steady receipt: ${side.replace("BUY_","")} requested ${requestedDisplay}, filled ${filledDisplay}, remaining ${remainingDisplay} (${receiptFillStatus}) · ${pricePresentation.copyText} · max loss ${maxLossDisplay} tUSDC · tx https://shannon-explorer.somnia.network/tx/${attempt.txHash}`;
             try{ await navigator.clipboard.writeText(txt); cp.textContent = "Copied ✓"; }
             catch{ cp.textContent = "Copy blocked"; }
             setTimeout(()=>{ cp.textContent = "Copy proof"; }, 2500);
@@ -1238,49 +1356,23 @@ async function execute(side){
     setTimeout(()=>{ refreshFills(); window.__submitting=false; updateExecutionControls(); }, 3000);
   }catch(e){
     const msg = e.message||String(e);
-    // UNKNOWN vs FAILED — never convert timeout to failed without receipt check
-    const isTimeout = msg.includes("timeout") || msg.includes("Timeout") || msg.includes("UND_ERR") || msg.includes("ConnectTimeout");
-    const maybeHash = (e.data && e.data.transactionHash) || (e.cause && e.cause.transactionHash) || window.__lastAttemptHash || "";
-    if(isTimeout && maybeHash){
-      unresolvedTransactionHash = maybeHash;
-      els.execStatus.textContent=`UNKNOWN — submitted ${maybeHash.slice(0,10)}… but RPC timed out. Reconciling…`;
+    // A timeout after placeOrder may have signed or broadcast without returning
+    // a hash. Both cases stay UNKNOWN and block duplicates; only a hash permits
+    // receipt polling, and it can come from this attempt only.
+    const reconciliation = classifyTradeSubmissionError({ error: e, attempt });
+    if(reconciliation.state === "UNKNOWN"){
+      attempt.txHash = reconciliation.txHash;
+      unresolvedTradeAttempt = { tradeAttemptId, txHash: attempt.txHash };
+      els.execStatus.textContent = attempt.txHash
+        ? `UNKNOWN — submitted ${shortHash(attempt.txHash)} but RPC timed out. Reconciling…`
+        : `UNKNOWN — current trade attempt ${tradeAttemptId} may be signed or broadcast, but no transaction hash is available. Do not resubmit.`;
       els.execStatus.className="alert";
-      debugLog(`[${tradeAttemptId}] UNKNOWN timeout, hash ${maybeHash}, will reconcile via getTransactionReceipt`);
-      // Reconcile: poll receipt
-      (async()=>{
-        try{
-          const ex2=await getExchange();
-          for(let i=0;i<6;i++){
-            await new Promise(r=>setTimeout(r,3000));
-            try{
-              const rc=await ex2.client.getViemClient().getTransactionReceipt({ hash: maybeHash });
-              if(rc.status==="success"){
-                unresolvedTransactionHash = "";
-                // A late receipt proves the transaction, not the financial effect.
-                // Reconcile the exact market/tx against indexed fills when possible;
-                // indexer lag stays explicitly unknown instead of becoming success.
-                let fillState = "FILL UNKNOWN";
-                try {
-                  const indexed = await withTimeout(
-                    ex2.client.getUserFills(walletAddress, { since: 0, limit: 50, market: market.marketId }),
-                    15000,
-                    "Fill reconciliation",
-                  );
-                  const evidence = classifyIndexedFillEvidence(indexed, maybeHash);
-                  if (evidence.state === "FILL_VERIFIED") fillState = "FILL VERIFIED";
-                  else if (Array.isArray(indexed)) fillState = "FILL UNKNOWN (no indexed fill yet)";
-                } catch {}
-                els.execStatus.innerHTML=`<span class="code">RECONCILED · TRANSACTION CONFIRMED · ${h(fillState)}</span> Reconciled — ${txMarkup(maybeHash)} (was UNKNOWN)`;
-                els.execStatus.className=fillState === "FILL VERIFIED" ? "alert alert-success" : "alert";
-                refreshFills();
-                break;
-              }
-              else if(rc.status==="reverted"){ unresolvedTransactionHash = ""; els.execStatus.textContent=`Reverted after UNKNOWN — ${maybeHash.slice(0,10)}…`; els.execStatus.className="alert alert-risk"; break; }
-            }catch{}
-          }
-        }catch{}
-        window.__submitting=false; updateExecutionControls();
-      })();
+      debugLog(`[${tradeAttemptId}] UNKNOWN timeout, hash ${attempt.txHash || "unavailable"}`);
+      if (attempt.txHash) reconcileTradeAttempt(attempt, market, currentPool);
+      else {
+        window.__submitting = false;
+        updateExecutionControls();
+      }
       return;
     }
     let hint="";
@@ -1532,6 +1624,7 @@ els.redeemAll.onclick = async()=>{
 
 async function reconcileRedemptionClaims(ex, hash, generation, entries) {
   if (!redemptionRequests.isCurrent(generation)) return;
+  setRedemptionState("RECONCILING", "Transaction confirmed — reconciling submitted claims…");
   for (let attempt = 0; attempt < 6 && redemptionRequests.isCurrent(generation); attempt += 1) {
     try {
       const remaining = await withTimeout(ex.client.getClaimable(walletAddress), 15000, "Post-redemption claim scan");
@@ -1574,18 +1667,14 @@ window.__steady = window.__steady || {};
 window.__steady.receiptPricePresentation = receiptPricePresentation;
 window.__steady.updateExecutionControls = updateExecutionControls;
 window.__steady.selectMarket = selectMarket;
-window.__steady.selectionSnapshot = () => ({ marketId: selected?.marketId || null, hasBook: Boolean(book), hasBookParams: Boolean(bookParams), error: selectionError || "" });
+window.__steady.selectionSnapshot = () => ({ marketId: selected?.marketId || null, hasBook: Boolean(book), hasBookParams: Boolean(bookParams), bookReceivedAt, error: selectionError || "" });
 window.__steadyBootedAt = Date.now();
+restoreCooldownState();
 updateExecutionControls();
 loadMarkets().finally(()=>{ window.__steadyBooted = true; try{ renderPolicyGate(); }catch{} });
 setInterval(()=>{ if(document.visibilityState==="visible") loadMarkets(); }, 90_000); // discovery 60-120s per 32, not 30s
 setInterval(()=>{
-  if(cooldownUntil && cooldownUntil > Date.now()){
-    const sec=Math.ceil((cooldownUntil-Date.now())/1000);
-    els.tiltCountdown.textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
-    const streak = window.__cooldownStreak ?? 2;
-    els.tiltMsg.textContent = `${streak} consecutive losses. Trading resumes in ${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}.`;
-  }
+  if(document.visibilityState === "visible") renderDiscipline(window.__lastSettledCalls || []);
 },1000);
 
 // Wallet listeners

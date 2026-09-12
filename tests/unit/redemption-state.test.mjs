@@ -8,6 +8,7 @@ import {
   redemptionStateAfterReconcile,
   countMatchingClaims,
   canRetryReconciliation,
+  redemptionReconciliationState,
 } from "../../lib/steady/redemption-state.js";
 
 describe("redemption state", () => {
@@ -18,6 +19,7 @@ describe("redemption state", () => {
     assert.equal(redemptionButtonDisabled("SUBMITTING"), true);
     assert.equal(redemptionButtonDisabled("UNKNOWN"), true);
     assert.equal(redemptionButtonDisabled("CONFIRMED"), true);
+    assert.equal(redemptionButtonDisabled("RECONCILING"), true);
     assert.equal(redemptionButtonDisabled("REDEEMED"), true);
     assert.equal(redemptionButtonDisabled("READY"), false);
   });
@@ -31,6 +33,12 @@ describe("redemption state", () => {
     assert.equal(redemptionStateAfterReconcile({ receiptStatus: "success", claimsRemaining: 0, scanComplete: false }), "UNKNOWN");
     assert.equal(canRetryReconciliation("UNKNOWN", true), true);
     assert.equal(canRetryReconciliation("UNKNOWN", false), false);
+  });
+
+  it("exposes reconciliation as a distinct non-terminal state", () => {
+    assert.equal(redemptionReconciliationState(), "RECONCILING");
+    assert.equal(redemptionStateAfterReconcile({ receiptStatus: "success", claimsRemaining: 0, scanComplete: false }), "UNKNOWN");
+    assert.equal(canRetryReconciliation("RECONCILING", true), false);
   });
 
   it("classifies timeout outcomes by whether a transaction hash is known", () => {

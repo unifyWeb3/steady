@@ -16,6 +16,7 @@ import { resolvePositionState as resolvePositionStateBrowser } from "./position-
 export type PositionTab = "LIVE" | "SETTLING" | "CLAIMABLE" | "WON" | "LOST" | "VOID" | "UNKNOWN";
 
 export type FillPositionInput = {
+  accountSide?: string; // resolved wallet side; explicit UNKNOWN stays UNKNOWN
   takerSide?: string;
   side?: string; // e.g. "BUY_YES" / "BUY_NO" / "SELL_YES" / "SELL_NO"
   status?: number | null;

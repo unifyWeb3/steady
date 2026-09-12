@@ -22,6 +22,9 @@ fs.writeFileSync(
 const browserModules = [
   "lib/steady/trade-intent.js",
   "lib/steady/scoring.js",
+  "lib/steady/discipline.js",
+  "lib/steady/fill-attribution.js",
+  "lib/steady/trade-reconciliation.js",
   "lib/steady/position-state.js",
   "lib/steady/dom.js",
   "lib/steady/redemption-state.js",

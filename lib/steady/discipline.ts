@@ -1,49 +1,46 @@
-// lib/steady/discipline.ts — 2-loss cooldown pure
+// lib/steady/discipline.ts - typed facade for the shipped browser helper
+
+import {
+  deriveDiscipline as deriveDisciplineBrowser,
+  shouldBlockForCooldown as shouldBlockForCooldownBrowser,
+} from "./discipline.js";
 
 export type DisciplineState = {
   consecutiveLosses: number;
   cooldownUntilMs: number | null; // epoch ms, null if not cooling
+  cooldownKey?: string | null;
   blocked: boolean;
   reason?: string;
   resumeInSec?: number;
 };
 
-const COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes per 19-mvp-spec
-const LOSS_THRESHOLD = 2;
+export type DisciplineCall = {
+  won: boolean;
+  void?: boolean;
+  voided?: boolean;
+  eventKey?: string;
+  fillId?: string;
+  id?: string;
+  txHash?: string;
+  timestamp?: string | number;
+  blockNumber?: string | number;
+  logIndex?: string | number;
+};
 
-export function deriveDiscipline(calls: { won: boolean; void?: boolean }[], nowMs: number = Date.now(), existingCooldownMs: number | null = null): DisciplineState {
-  // count trailing losses ignoring voids
-  const settled = calls.filter((c) => !c.void);
-  let streak = 0;
-  for (let i = settled.length - 1; i >= 0; i--) {
-    if (!settled[i].won) streak++;
-    else break;
-  }
-  // if already cooling, keep it
-  if (existingCooldownMs !== null && existingCooldownMs > nowMs) {
-    return {
-      consecutiveLosses: streak,
-      cooldownUntilMs: existingCooldownMs,
-      blocked: true,
-      reason: `${streak} consecutive losses — cooldown active`,
-      resumeInSec: Math.ceil((existingCooldownMs - nowMs) / 1000),
-    };
-  }
-  if (streak >= LOSS_THRESHOLD) {
-    const until = nowMs + COOLDOWN_MS;
-    return {
-      consecutiveLosses: streak,
-      cooldownUntilMs: until,
-      blocked: true,
-      reason: `${streak} consecutive losses — 3 min cooldown`,
-      resumeInSec: COOLDOWN_MS / 1000,
-    };
-  }
-  return { consecutiveLosses: streak, cooldownUntilMs: null, blocked: false };
+export function deriveDiscipline(
+  calls: DisciplineCall[],
+  nowMs: number = Date.now(),
+  existingCooldownMs: number | null = null,
+  lastCooldownKey: string | null = null,
+): DisciplineState {
+  return deriveDisciplineBrowser(calls, nowMs, existingCooldownMs, lastCooldownKey) as DisciplineState;
 }
 
-export function shouldBlockForCooldown(calls: { won: boolean; void?: boolean }[], cooldownUntilMs: number | null, nowMs = Date.now()): boolean {
-  if (cooldownUntilMs && cooldownUntilMs > nowMs) return true;
-  const d = deriveDiscipline(calls, nowMs, cooldownUntilMs);
-  return d.blocked;
+export function shouldBlockForCooldown(
+  calls: DisciplineCall[],
+  cooldownUntilMs: number | null,
+  nowMs = Date.now(),
+  lastCooldownKey: string | null = null,
+): boolean {
+  return shouldBlockForCooldownBrowser(calls, cooldownUntilMs, nowMs, lastCooldownKey);
 }

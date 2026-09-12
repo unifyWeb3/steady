@@ -4,7 +4,7 @@
 
 **Architecture:** Browser → SDK (SomniaMarkets 0.29.0, SOMNIA_TESTNET_ADDRESSES) → indexer dev.smk + WS wss://api.infra.testnet.somnia.network/ws → chain. No backend/DB; lib/dreamdex (real SDK) + lib/steady (pure) + app/ (warm paper static via esm.sh, window.ethereum). See research/31.
 
-**Phase:** Penultimate audit 2026-09-05 (deadline Sep 8 18:00 UTC). Rules re-verified; forensics 4/4 re-PASS; 5/5 browser PASS; README+LICENSE added; honest score 73/100 (80 with video+E2E). Remaining: manual popup E2E (+DOWN), vercel --prod (no auth in env), demo video, repo public flip.
+**Phase:** Correctness/reconciliation hardening 2026-09-12. Discipline, current-attempt reconciliation, role-specific fill attribution, and display freshness are implemented locally; real popup/funded proof and healthy live discovery remain external.
 
 **Verified protocol:** listLiveBinaryMarkets 14 live (60/300/900/3600 BTC/ETH), getMarketOnchain status 1 Trading, getBinaryOrderBook 0.751/0.777 spread, tick/lot 1000, IOC 2 with expire nanos, faucet 10k tUSDC.
 
@@ -18,9 +18,9 @@
 
 **Gotchas:** gate onchain 1, tick/lot 1000, expire nanos capped marketExpiry-10s, FOK→IOC fix, taker pays fill not quoted, 60/300 windows live (not only 15m/1h), approval qty not escrow, pool recycling key by marketId, indexer transient timeouts retry, BigInt JSON needs replacer.
 
-**Blockers:** Injected-wallet browser E2E (walletClient IOC) not yet live-proven (privateKey path proven) — next; settlement→redeem needs Finalized market (currently 2 fills not yet settled); tilt guard placeholder random — needs real discipline wiring.
+**Blockers:** Playwright Chromium launch is restricted in this environment (`SIGTRAP` / Crashpad permission); the read-only SDK validator currently times out at Gate 2 indexer discovery; real MetaMask/Rabby popup signing and fresh funded proof remain human/external. The discipline gate is now wired to real settled outcomes.
 
-**Next:** npm run validate → browser E2E via window.ethereum (small maxLoss IOC) → verify fill/position → wait for lock → redeem via Finalized → audit receipt quoted vs actual → visual QA mobile → build/deploy smoke test.
+**Next:** rerun read-only `npm run validate` when indexer discovery is healthy; rerun Playwright in a permitted Chromium environment; then perform only explicitly authorized human popup/funded verification. Never use `npm run validate:write` to manufacture evidence.
 
 **Commands:** npm run validate, npm run validate:write, npm test, npm run dev (node serve.mjs → http://localhost:5173)
 
@@ -56,3 +56,5 @@
 **Final presentation cleanup 2026-09-11:** Removed legacy negative letter-spacing from the frontend CSS and synchronized the design token tables. Final geometry probe: zero clipping/overflow/page errors at all four widths; Playwright 8/8 remains green.
 
 **Release checkpoint 2026-09-11 15:00 UTC (pre-commit):** FRESH: npm test 67/67, build (dist/app.js 87,183 bytes, runtime-config present, PARTIAL FILL + Quoted NO, no `Trade completed`), node --check, diff check, Playwright 11/11 (Node 22), validate Gates 1-4+6 PASS first run (20 live, 0 Steady-filtered >300s at 14:59 UTC as all windows near expiry, Trading via search, book 444000/514000, tick/lot/min 1000, 2 claimables NOT redeemed, write skipped). HISTORICAL: earlier IOC/settlement/redemption hashes unchanged, not re-dated.
+
+**Current verification 2026-09-12 03:06 WAT:** npm test 82/82 PASS, build PASS, app syntax PASS, diff check PASS. Playwright was attempted with Node 22.22.3 but every test stopped at Chromium launch (`SIGTRAP`, Crashpad `setsockopt: Operation not permitted`), so no browser pass is claimed. Read-only `npm run validate` passed Gate 1 and timed out at Gate 2 `LiveBinaryMarkets`; Gates 3 onward did not run and no new live protocol evidence is claimed.

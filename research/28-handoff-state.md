@@ -1,12 +1,12 @@
 # 28 — Handoff State
 
-**Last verified:** 2026-09-04 — **GATES 1-4 RE-PASS (node harness) + FRONTEND RELIABILITY FIX + BROWSER QA (chromium) — walletClient signing still CODE-EXISTS-BUT-UNVERIFIED via real MetaMask popup**
-**Source run:** `npm run validate:write` — live Shannon 50312 (`scripts/validate/validate.mjs`)
+**Last verified:** 2026-09-12 — local correctness/reconciliation hardening; read-only SDK validation passed Gate 1 and timed out at Gate 2. Browser launch was environment-blocked.
+**Source run:** `npm run validate` — read-only Shannon 50312 (`scripts/validate/validate.mjs`)
 **SDK:** 0.29.0 (`node_modules/@somnia-chain/markets-sdk/package.json:3`)
 
 ## Current phase
-`Phase 1 — Steady Control Plane + Frontend Reliability — IN PROGRESS`
-**Gates 1-4 RE-PASS 2026-09-04 (node harness, 14 live, Trading, book 0.261/0.288, tick 1000). Unit 13/13 PASS. Browser: homepage PASS, terminal shell+error states PASS (chromium), wallet connect (mock Rabby) PASS. Real MetaMask popup signing still CODE-EXISTS-BUT-UNVERIFIED. No mocks. No deployment yet.**
+`Correctness/reconciliation hardening — local implementation complete; live/browser verification blocked`
+**Local: 82/82 unit PASS, build/syntax/diff PASS. Live read-only validator: Gate 1 PASS, Gate 2 `LiveBinaryMarkets` timeout. Playwright Chromium launch is blocked by the environment before assertions. Real MetaMask/Rabby popup signing and fresh funded evidence remain unverified.**
 
 ## Verification provenance — 2026-09-04 browser pass
 | Flow | Provenance | Evidence |
@@ -337,3 +337,43 @@ HISTORICAL EVIDENCE (unchanged, not re-dated): earlier live IOC, browser YES/NO,
 - No Vercel CLI credentials existed in this environment (`vercel whoami` → no-credentials; local vercel installs broken), so no CLI deployment was run. Production `https://somnia-snowy.vercel.app` served the new release candidate on re-check the same day (Vercel `last-modified 15:09 UTC`, consistent with GitHub auto-deploy from the release commit push).
 - PRODUCTION ARTIFACT MATCH: `/` 200 byte-identical to new `index.html`; `/terminal` 200 byte-identical to new `terminal.html` (`/terminal.html` 308 → `/terminal` per `cleanUrls`); `/runtime-config.js` 200 identical to generated config (chain 50312); `/app.js` 200, 87,183 bytes, byte-identical to `dist/app.js` — PARTIAL FILL + Quoted NO present, obsolete `Trade completed` absent, no secrets, no localhost refs.
 - READ-ONLY SMOKE (Playwright chromium, real prod URL, no wallet/signing/faucet/redeem): 15/15 PASS — home title + Open-terminal CTA → `/terminal`; runtime-config chain 50312; 6-8 live discovery rows (BTC 4h, ~45m headroom); market select + max-loss 2 prices the side-explicit UP/YES and DOWN/NO matrix; policy gate, wallet-connect button, and zero-overflow/zero-error state confirmed. No console or page errors.
+
+## 2026-09-12 - Discipline, reconciliation, and fill-attribution hardening
+
+- Scope: close the remaining audit findings around the two-loss discipline
+  state machine, current-attempt timeout reconciliation, role-specific fill
+  attribution, and the UI-only orderbook age gate. No SDK, address, backend,
+  raw-IP, mock-protocol, deployment, commit, push, or funded-write change was
+  made.
+- Discipline: shipped `lib/steady/discipline.js` is the single browser/test
+  implementation. It sorts SDK history chronologically, derives trailing
+  settled outcomes before the five-call score threshold, ignores voids, keys
+  the first loss in a streak, and prevents the same old streak from creating a
+  second cooldown after expiry. `app/app.js` uses the same helper for display,
+  controls, preview, and the execution boundary.
+- Reconciliation: every submission owns a `tradeAttemptId` and its own hash.
+  Previous-attempt hashes are never used. A timeout after signing/broadcast
+  with no current hash remains `UNKNOWN` and duplicate-blocked; a current hash
+  alone is the only receipt-poll input. Late success clears both the unresolved
+  attempt and submit lock, then keeps fill evidence separate from transaction
+  confirmation.
+- Attribution: takers prefer `takerOrder.side` over the lagging `takerSide`;
+  makers use `makerSide`; missing side data stays `UNKNOWN`. Chronological fill
+  normalization covers SDK newest-first rows, including rows without optional
+  ordering metadata.
+- Freshness: removed the display-only 30-second orderbook denial. The
+  execution path still performs fresh status, book, status-recheck, and params
+  reads immediately before intent construction/signing.
+- Regression coverage: discipline (7), fill attribution/ordering (6), trade
+  reconciliation (4), and unresolved position-side (1) tests are shipped from
+  the domain helpers rather than copied test implementations.
+- Verification at 2026-09-12 03:06 WAT: `npm test` 82/82 PASS; `npm run build`
+  PASS; `node --check app/app.js` PASS; `git diff --check` PASS.
+- Browser verification was attempted with Node 22.22.3 and the installed
+  Chromium; all 11 Playwright tests stopped at browser launch with Chromium
+  `SIGTRAP` / Crashpad `setsockopt: Operation not permitted`. This is an
+  environment blocker, not a browser assertion pass or failure claim.
+- Read-only `npm run validate` reached Gate 1 and failed at Gate 2:
+  `LiveBinaryMarkets` aborted on the configured indexer timeout. Gates 3 onward
+  were not run. No live evidence was created or re-dated. Existing hashes and
+  production observations remain historical.

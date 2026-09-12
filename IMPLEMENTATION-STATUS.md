@@ -1,6 +1,32 @@
 # Implementation Status — Steady
 
-## P0 correctness hardening — 2026-09-08 (current)
+## Current verification refresh — 2026-09-12
+
+The focused hardening pass is implemented in the browser/domain boundary. The
+canonical discipline helper now normalizes settled history, fires one keyed
+three-minute cooldown after two trailing losses even below five fills, ignores
+voids, and does not re-arm an unchanged streak after expiry. Fill attribution
+uses `takerOrder.side` for takers, `makerSide` for makers, and preserves
+`UNKNOWN` when the account side is unresolved. Submission reconciliation is
+scoped to the current `tradeAttemptId`; a timeout with no current-attempt hash
+stays `UNKNOWN` and duplicate-blocked. The display-only orderbook age gate was
+removed; the fresh status/book/params read immediately before signing remains.
+
+Current local verification: `npm test` 82/82 PASS; `npm run build` PASS;
+`node --check app/app.js` PASS; `git diff --check` PASS. The Playwright suite
+was attempted under Node 22.22.3 with the installed Chromium, but all 11 tests
+were blocked at browser launch by the environment (`SIGTRAP`; Chromium
+Crashpad `setsockopt: Operation not permitted`), so this is not recorded as a
+browser behavior pass or code assertion failure.
+
+Read-only `npm run validate` on 2026-09-12 passed Gate 1 (SDK client creation,
+chain 50312, SDK 0.29.0) and failed at Gate 2 because the SDK
+`LiveBinaryMarkets` request to the configured indexer timed out. Gates 3 onward
+did not run. No new live market, fill, settlement, redemption, or transaction
+evidence is claimed; the safe fallback remains retry/status-unavailable with
+execution blocked.
+
+## P0 correctness hardening — 2026-09-08
 
 Authorized P0 fixes are implemented. Current verification: 48/48 unit tests, build pass, syntax pass, and Playwright 6/6. A fresh `npm run validate` reaches Gate 1 but Gate 2 currently fails with indexer DNS `EAI_AGAIN`; no new live Gate 2-6 evidence is claimed.
 
@@ -14,10 +40,10 @@ Authorized P0 fixes are implemented. Current verification: 48/48 unit tests, bui
 
 See `research/65-final-release-blockers.md` and `research/66-p1-implementation-plan.md`.
 
-Last updated: 2026-09-10 - lifecycle unknown-state alignment plus the approved frontend finishing pass. The current local verification is recorded below; live Gate 2 remains blocked by indexer DNS EAI_AGAIN.
+Last updated: 2026-09-12 - discipline, current-attempt reconciliation, role-specific fill attribution, and display freshness hardening. Current local and live-boundary results are recorded above.
 
 ## Current Phase
-**Phase 1 — Steady Live** — **Gates 1-5 Re-verified 2026-09-03, 13 unit tests PASS, app shell live :5173 (real SDK via esm.sh, warm paper, no purple glow), lib/dreamdex + lib/steady complete**
+**Correctness/reconciliation hardening** — local implementation complete; live SDK discovery and browser launch remain externally blocked.
 
 ## Completed
 - [x] Research package 00-27 + SOURCES + RESEARCH-LOG verified (SDK 0.29.0, chain 50312, Event Contracts BTC/ETH 1m/5m/15m/1h live)

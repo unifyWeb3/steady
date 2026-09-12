@@ -235,3 +235,33 @@
 - No Vercel CLI credentials existed here, so no CLI deploy ran. Live `https://somnia-snowy.vercel.app` serves the release candidate (Vercel `last-modified 15:09 UTC`, consistent with auto-deploy from the release-commit push).
 - Artifact: `/` + `/terminal` 200 byte-identical to the new build; `/runtime-config.js` 200 (chain 50312); `/app.js` 87,183 bytes byte-identical to `dist/app.js` with PARTIAL FILL + Quoted NO present and `Trade completed`/secrets/localhost absent.
 - Smoke: 15/15 Playwright PASS on the prod URL, zero console/page errors. The 2 claimables remain unredeemed; no `validate:write` ran.
+
+## 2026-09-12 - Discipline, reconciliation, and fill attribution
+
+- Q: Do the remaining audit findings have one shipped source of truth for
+  cooldown history, current-attempt timeout state, and account-side fill data?
+- Source: `app/app.js`, `lib/steady/discipline.js`,
+  `lib/steady/fill-attribution.js`, `lib/steady/trade-reconciliation.js`,
+  shipped position state, unit regressions, and installed SDK 0.29.0
+  `fills.d.ts` / `derivedReads.js` declarations and implementation.
+- Finding: yes locally. SDK newest-first fills are normalized chronologically;
+  settled outcomes are available before the five-call score threshold; voids
+  are ignored; a two-loss streak creates one keyed three-minute cooldown and
+  the unchanged streak does not re-arm after expiry. Takers use
+  `takerOrder.side`, makers use `makerSide`, and unresolved account-side data
+  stays `UNKNOWN`.
+- Finding: submission errors are scoped to the current `tradeAttemptId` and
+  current attempt hash. A no-hash timeout after submission stays `UNKNOWN` and
+  duplicate-blocked; only a current hash is receipt-polled. The display-only
+  orderbook age gate was removed while the fresh execution-time read remains.
+- Verification: `npm test` 82/82 PASS; `npm run build` PASS;
+  `node --check app/app.js` PASS; `git diff --check` PASS. Playwright was
+  attempted under Node 22.22.3 but Chromium launch was blocked by
+  `SIGTRAP` / Crashpad `setsockopt: Operation not permitted` in this
+  environment, so no browser behavior pass is claimed.
+- Live boundary: read-only `npm run validate` passed Gate 1 and failed Gate 2
+  when the SDK `LiveBinaryMarkets` request timed out. Gates 3 onward did not
+  run; no new live market, fill, settlement, redemption, or transaction
+  evidence is claimed. Safe fallback is retry/status-unavailable and blocked
+  execution. No protocol assumption changed, so historical numbered research
+  files and historical evidence were not rewritten.
